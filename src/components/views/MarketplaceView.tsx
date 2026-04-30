@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getListings, createListing } from '@/services/db';
+import { api } from '@/services/api';
 import { Listing, Category, Condition, ListingStatus } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { 
@@ -44,7 +44,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 
 export function MarketplaceView() {
-  const { user, profile } = useAuth();
+  const { user, profile, getToken } = useAuth();
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -63,9 +63,14 @@ export function MarketplaceView() {
 
   const fetchListings = async () => {
     setLoading(true);
-    const data = await getListings(categoryFilter === 'ALL' ? undefined : categoryFilter);
-    setListings(data);
-    setLoading(false);
+    try {
+      const data = await api.getListings(categoryFilter === 'ALL' ? undefined : categoryFilter);
+      setListings(data);
+    } catch (error) {
+      toast.error('Failed to load listings');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -82,12 +87,14 @@ export function MarketplaceView() {
     if (!user || !profile) return;
 
     try {
-      await createListing({
+      const token = await getToken();
+      if (!token) throw new Error('Not authenticated');
+
+      await api.createListing({
         ...newListing,
         price: parseFloat(newListing.price) || 0,
-        sellerId: user.uid,
         sellerName: profile.name,
-      });
+      }, token);
       toast.success('Listing created successfully!');
       setIsAdding(false);
       setNewListing({

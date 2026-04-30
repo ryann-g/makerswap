@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getBounties, createBounty } from '@/services/db';
+import { api } from '@/services/api';
 import { Bounty, BountyStatus } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { 
@@ -33,7 +33,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 
 export function BountiesView() {
-  const { user, profile } = useAuth();
+  const { user, profile, getToken } = useAuth();
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -47,9 +47,14 @@ export function BountiesView() {
 
   const fetchBounties = async () => {
     setLoading(true);
-    const data = await getBounties();
-    setBounties(data);
-    setLoading(false);
+    try {
+      const data = await api.getBounties();
+      setBounties(data);
+    } catch (error) {
+      toast.error('Failed to load bounties');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -61,12 +66,14 @@ export function BountiesView() {
     if (!user || !profile) return;
 
     try {
-      await createBounty({
+      const token = await getToken();
+      if (!token) throw new Error('Not authenticated');
+
+      await api.createBounty({
         ...newBounty,
         budget: parseFloat(newBounty.budget) || 0,
-        posterId: user.uid,
         posterName: profile.name,
-      });
+      }, token);
       toast.success('Bounty posted successfully!');
       setIsAdding(false);
       setNewBounty({ title: '', description: '', budget: '' });
