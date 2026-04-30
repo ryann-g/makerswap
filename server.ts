@@ -24,32 +24,52 @@ let auth: any;
 try {
   // MUST DOWNLOAD THIS FROM FIREBASE CONSOLE -> PROJECT SETTINGS -> SERVICE ACCOUNTS
   const serviceAccountPath = path.join(process.cwd(), "serviceAccountKey.json");
+  let app: any;
+
   if (fs.existsSync(serviceAccountPath)) {
     const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
-    initializeApp({
-      credential: cert(serviceAccount)
+    app = initializeApp({
+      credential: cert(serviceAccount),
+      projectId: firebaseConfig.projectId
     });
     console.log("Firebase Admin initialized successfully with serviceAccountKey.json.");
   } else {
     console.warn("serviceAccountKey.json not found, falling back to ADC/Config.");
     const projectId = firebaseConfig.projectId;
     if (getApps().length === 0) {
-      initializeApp({
+      app = initializeApp({
         projectId: projectId,
         credential: applicationDefault(),
       });
+    } else {
+      app = getApp();
     }
   }
   
+  // Use Explicit Database ID from config
   const databaseId = (firebaseConfig.firestoreDatabaseId || "(default)").trim();
-  db = getFirestore(databaseId);
-  auth = getAuth();
+  db = getFirestore(app, databaseId);
+  auth = getAuth(app);
   
   console.log("Firebase Admin Ready");
+  console.log(" - Project ID:", firebaseConfig.projectId);
   console.log(" - Database ID:", databaseId);
+
+  // Test connection
+  db.collection("listings").limit(1).get()
+    .then((snap: any) => console.log(`Database connectivity test successful. Found ${snap.size} listings.`))
+    .catch((err: any) => console.error("Database connectivity test failed:", err.message));
 } catch (e) {
   console.error("Firebase Admin initialization failed:", e);
 }
+
+// Helper to normalize timestamps for sorting
+const getTimestamp = (val: any): number => {
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') return new Date(val).getTime();
+  if (val && typeof val.toMillis === 'function') return val.toMillis();
+  return 0;
+};
 
 // Collection names
 const COLLECTIONS = {
@@ -108,6 +128,11 @@ async function startServer() {
   // --- Listings ---
   app.get("/api/listings", async (req: Request, res: Response) => {
     try {
+      if (!db) {
+        console.error("Firestore DB not initialized");
+        return res.status(500).json({ error: "Database not initialized" });
+      }
+
       // FIX: Removed .orderBy() to prevent Composite Index errors
       let query: any = db.collection(COLLECTIONS.LISTINGS);
       
@@ -119,15 +144,23 @@ async function startServer() {
       }
 
       const snapshot = await query.get();
-      const listings = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      console.log(`Fetched ${snapshot.size} listings for query:`, req.query);
+      const listings = snapshot.docs.map((doc: any) => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      }));
       
-      // FIX: Sort in memory instead
-      listings.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      // FIX: Robust sort in memory
+      listings.sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
       
       res.json(listings);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching listings:", error);
-      res.status(500).json({ error: "Failed to fetch listings" });
+      res.status(500).json({ 
+        error: "Failed to fetch listings", 
+        details: error.message,
+        code: error.code
+      });
     }
   });
 
@@ -200,10 +233,11 @@ async function startServer() {
       }
 
       const snapshot = await query.get();
+      console.log(`Fetched ${snapshot.size} bounties for query:`, req.query);
       const bounties = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       
-      // FIX: Sort in memory instead
-      bounties.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      // FIX: Robust sort in memory
+      bounties.sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
       
       res.json(bounties);
     } catch (error) {
