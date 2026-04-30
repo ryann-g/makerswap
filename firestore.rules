@@ -1,0 +1,90 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- User Profiles ---
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming());
+
+      function isValidUser(user) {
+        return user.keys().hasAll(['uid', 'name', 'email']) &&
+               user.uid == request.auth.uid &&
+               user.name is string && user.name.size() <= 100 &&
+               user.email is string && user.email.size() <= 100 &&
+               (!('universityOrg' in user) || (user.universityOrg is string && user.universityOrg.size() <= 100)) &&
+               (!('bio' in user) || (user.bio is string && user.bio.size() <= 500));
+      }
+    }
+
+    // --- Listings ---
+    match /listings/{listingId} {
+      allow read: if true; // Public marketplace access
+      allow create: if isSignedIn() && isOwner(incoming().sellerId) && isValidListing(incoming());
+      allow update: if isSignedIn() && isOwner(existing().sellerId) && isValidListing(incoming()) && (
+        // Only allow status changes or full owner updates
+        incoming().diff(existing()).affectedKeys().hasOnly(['status']) ||
+        incoming().sellerId == existing().sellerId
+      );
+      allow delete: if isSignedIn() && isOwner(existing().sellerId);
+
+      function isValidListing(listing) {
+        return listing.title is string && listing.title.size() <= 100 &&
+               listing.description is string && listing.description.size() <= 2000 &&
+               listing.price is number && listing.price >= 0 &&
+               listing.category in ['SENSORS', 'MICROCONTROLLERS', 'ACTUATORS', 'PASSIVES', 'TOOLS', 'OTHER'] &&
+               listing.condition in ['NEW', 'USED', 'SALVAGED'] &&
+               listing.status in ['AVAILABLE', 'SOLD'] &&
+               listing.sellerId == request.auth.uid &&
+               listing.createdAt is number;
+      }
+    }
+
+    // --- Bounties ---
+    match /bounties/{bountyId} {
+      allow read: if true; // Public access to project board
+      allow create: if isSignedIn() && isOwner(incoming().posterId) && isValidBounty(incoming());
+      allow update: if isSignedIn() && isOwner(existing().posterId) && isValidBounty(incoming()) && (
+        // Only allow status changes or full owner updates
+        incoming().diff(existing()).affectedKeys().hasOnly(['status']) ||
+        incoming().posterId == existing().posterId
+      );
+      allow delete: if isSignedIn() && isOwner(existing().posterId);
+
+      function isValidBounty(bounty) {
+        return bounty.title is string && bounty.title.size() <= 100 &&
+               bounty.description is string && bounty.description.size() <= 2000 &&
+               bounty.budget is number && bounty.budget >= 0 &&
+               bounty.status in ['OPEN', 'IN_PROGRESS', 'COMPLETED'] &&
+               bounty.posterId == request.auth.uid &&
+               bounty.createdAt is number;
+      }
+    }
+  }
+}
