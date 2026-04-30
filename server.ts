@@ -10,19 +10,25 @@ import fs from "fs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load firebase config for project ID
-const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8"));
+// Load firebase config
+const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+let firebaseConfig: any = {};
+if (fs.existsSync(configPath)) {
+  firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+}
 
 // Initialize Firebase Admin
 try {
   initializeApp({
     projectId: firebaseConfig.projectId,
   });
+  console.log("Firebase Admin initialized for project:", firebaseConfig.projectId);
 } catch (e) {
-  console.error("Firebase Admin initialization failed.", e);
+  console.error("Firebase Admin initialization failed:", e);
 }
 
-const db = getFirestore();
+// Initialize Firestore with the specific database ID from config
+const db = getFirestore(firebaseConfig.firestoreDatabaseId || "(default)");
 const auth = getAuth();
 
 // Collection names
@@ -42,13 +48,30 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Health check
+  app.get("/api/health", async (req, res) => {
+    try {
+      await db.collection("health").doc("check").get();
+      res.json({ status: "ok", database: "connected" });
+    } catch (error: any) {
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
+  // Log all requests
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url}`);
+    next();
+  });
+
   // --- API Routes ---
 
   // Auth Middleware
   const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized" });
+      console.error("No auth header provided");
+      return res.status(401).json({ error: "Unauthorized: No token provided" });
     }
 
     const idToken = authHeader.split("Bearer ")[1];
@@ -57,8 +80,8 @@ async function startServer() {
       req.user = decodedToken;
       next();
     } catch (error) {
-      console.error("Auth error:", error);
-      res.status(401).json({ error: "Invalid token" });
+      console.error("Auth token verification failed:", error);
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
     }
   };
 
@@ -66,16 +89,19 @@ async function startServer() {
   app.get("/api/listings", async (req: Request, res: Response) => {
     try {
       let query: any = db.collection(COLLECTIONS.LISTINGS).orderBy("createdAt", "desc");
+      
       if (req.query.userId) {
         query = query.where("sellerId", "==", req.query.userId);
       }
-      if (req.query.category) {
+      if (req.query.category && req.query.category !== 'ALL') {
         query = query.where("category", "==", req.query.category);
       }
+
       const snapshot = await query.get();
       const listings = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       res.json(listings);
     } catch (error) {
+      console.error("Error fetching listings:", error);
       res.status(500).json({ error: "Failed to fetch listings" });
     }
   });
@@ -85,12 +111,15 @@ async function startServer() {
       const listingData = {
         ...req.body,
         sellerId: req.user.uid,
-        createdAt: new Date().toISOString(),
-        status: "AVAILABLE"
+        createdAt: Date.now(),
+        status: req.body.status || "AVAILABLE"
       };
+      
       const docRef = await db.collection(COLLECTIONS.LISTINGS).add(listingData);
+      console.log("Listing created:", docRef.id);
       res.status(201).json({ id: docRef.id, ...listingData });
     } catch (error) {
+      console.error("Error creating listing:", error);
       res.status(500).json({ error: "Failed to create listing" });
     }
   });
@@ -99,12 +128,18 @@ async function startServer() {
     try {
       const docRef = db.collection(COLLECTIONS.LISTINGS).doc(req.params.id);
       const doc = await docRef.get();
+      
       if (!doc.exists) return res.status(404).json({ error: "Listing not found" });
-      if (doc.data()?.sellerId !== req.user.uid) return res.status(403).json({ error: "Forbidden" });
+      
+      const data = doc.data();
+      if (data?.sellerId !== req.user.uid) {
+        return res.status(403).json({ error: "Forbidden: Not the owner" });
+      }
       
       await docRef.update(req.body);
-      res.json({ id: req.params.id, ...doc.data(), ...req.body });
+      res.json({ id: req.params.id, ...data, ...req.body });
     } catch (error) {
+      console.error("Error updating listing:", error);
       res.status(500).json({ error: "Failed to update listing" });
     }
   });
@@ -114,17 +149,17 @@ async function startServer() {
       const docRef = db.collection(COLLECTIONS.LISTINGS).doc(req.params.id);
       const doc = await docRef.get();
       
-      if (!doc.exists) {
-        return res.status(404).json({ error: "Listing not found" });
-      }
+      if (!doc.exists) return res.status(404).json({ error: "Listing not found" });
       
-      if (doc.data()?.sellerId !== req.user.uid) {
-        return res.status(403).json({ error: "Forbidden: Not the seller" });
+      const data = doc.data();
+      if (data?.sellerId !== req.user.uid) {
+        return res.status(403).json({ error: "Forbidden: Not the owner" });
       }
 
       await docRef.delete();
       res.json({ message: "Listing deleted" });
     } catch (error) {
+      console.error("Error deleting listing:", error);
       res.status(500).json({ error: "Failed to delete listing" });
     }
   });
@@ -133,13 +168,16 @@ async function startServer() {
   app.get("/api/bounties", async (req: Request, res: Response) => {
     try {
       let query: any = db.collection(COLLECTIONS.BOUNTIES).orderBy("createdAt", "desc");
+      
       if (req.query.userId) {
         query = query.where("posterId", "==", req.query.userId);
       }
+
       const snapshot = await query.get();
       const bounties = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       res.json(bounties);
     } catch (error) {
+      console.error("Error fetching bounties:", error);
       res.status(500).json({ error: "Failed to fetch bounties" });
     }
   });
@@ -149,12 +187,15 @@ async function startServer() {
       const bountyData = {
         ...req.body,
         posterId: req.user.uid,
-        createdAt: new Date().toISOString(),
+        createdAt: Date.now(),
         status: "OPEN"
       };
+      
       const docRef = await db.collection(COLLECTIONS.BOUNTIES).add(bountyData);
+      console.log("Bounty created:", docRef.id);
       res.status(201).json({ id: docRef.id, ...bountyData });
     } catch (error) {
+      console.error("Error creating bounty:", error);
       res.status(500).json({ error: "Failed to create bounty" });
     }
   });
@@ -163,12 +204,18 @@ async function startServer() {
     try {
       const docRef = db.collection(COLLECTIONS.BOUNTIES).doc(req.params.id);
       const doc = await docRef.get();
+      
       if (!doc.exists) return res.status(404).json({ error: "Bounty not found" });
-      if (doc.data()?.posterId !== req.user.uid) return res.status(403).json({ error: "Forbidden" });
+      
+      const data = doc.data();
+      if (data?.posterId !== req.user.uid) {
+        return res.status(403).json({ error: "Forbidden: Not the owner" });
+      }
       
       await docRef.update(req.body);
-      res.json({ id: req.params.id, ...doc.data(), ...req.body });
+      res.json({ id: req.params.id, ...data, ...req.body });
     } catch (error) {
+      console.error("Error updating bounty:", error);
       res.status(500).json({ error: "Failed to update bounty" });
     }
   });
@@ -177,12 +224,18 @@ async function startServer() {
     try {
       const docRef = db.collection(COLLECTIONS.BOUNTIES).doc(req.params.id);
       const doc = await docRef.get();
+      
       if (!doc.exists) return res.status(404).json({ error: "Bounty not found" });
-      if (doc.data()?.posterId !== req.user.uid) return res.status(403).json({ error: "Forbidden" });
+      
+      const data = doc.data();
+      if (data?.posterId !== req.user.uid) {
+        return res.status(403).json({ error: "Forbidden: Not the owner" });
+      }
 
       await docRef.delete();
       res.json({ message: "Bounty deleted" });
     } catch (error) {
+      console.error("Error deleting bounty:", error);
       res.status(500).json({ error: "Failed to delete bounty" });
     }
   });
@@ -196,6 +249,7 @@ async function startServer() {
       }
       res.json(doc.data());
     } catch (error) {
+      console.error("Error fetching user profile:", error);
       res.status(500).json({ error: "Failed to fetch user" });
     }
   });
@@ -208,6 +262,7 @@ async function startServer() {
       await db.collection(COLLECTIONS.USERS).doc(req.params.uid).set(req.body, { merge: true });
       res.json({ message: "User updated" });
     } catch (error) {
+      console.error("Error updating user profile:", error);
       res.status(500).json({ error: "Failed to update user" });
     }
   });
