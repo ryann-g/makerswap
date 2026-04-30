@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import { initializeApp } from "firebase-admin/app";
+import { initializeApp, getApps, getApp, applicationDefault, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import fs from "fs";
@@ -18,18 +18,38 @@ if (fs.existsSync(configPath)) {
 }
 
 // Initialize Firebase Admin
+let db: any;
+let auth: any;
+
 try {
-  initializeApp({
-    projectId: firebaseConfig.projectId,
-  });
-  console.log("Firebase Admin initialized for project:", firebaseConfig.projectId);
+  // MUST DOWNLOAD THIS FROM FIREBASE CONSOLE -> PROJECT SETTINGS -> SERVICE ACCOUNTS
+  const serviceAccountPath = path.join(process.cwd(), "serviceAccountKey.json");
+  if (fs.existsSync(serviceAccountPath)) {
+    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
+    initializeApp({
+      credential: cert(serviceAccount)
+    });
+    console.log("Firebase Admin initialized successfully with serviceAccountKey.json.");
+  } else {
+    console.warn("serviceAccountKey.json not found, falling back to ADC/Config.");
+    const projectId = firebaseConfig.projectId;
+    if (getApps().length === 0) {
+      initializeApp({
+        projectId: projectId,
+        credential: applicationDefault(),
+      });
+    }
+  }
+  
+  const databaseId = (firebaseConfig.firestoreDatabaseId || "(default)").trim();
+  db = getFirestore(databaseId);
+  auth = getAuth();
+  
+  console.log("Firebase Admin Ready");
+  console.log(" - Database ID:", databaseId);
 } catch (e) {
   console.error("Firebase Admin initialization failed:", e);
 }
-
-// Initialize Firestore with the specific database ID from config
-const db = getFirestore(firebaseConfig.firestoreDatabaseId || "(default)");
-const auth = getAuth();
 
 // Collection names
 const COLLECTIONS = {
@@ -88,7 +108,8 @@ async function startServer() {
   // --- Listings ---
   app.get("/api/listings", async (req: Request, res: Response) => {
     try {
-      let query: any = db.collection(COLLECTIONS.LISTINGS).orderBy("createdAt", "desc");
+      // FIX: Removed .orderBy() to prevent Composite Index errors
+      let query: any = db.collection(COLLECTIONS.LISTINGS);
       
       if (req.query.userId) {
         query = query.where("sellerId", "==", req.query.userId);
@@ -99,6 +120,10 @@ async function startServer() {
 
       const snapshot = await query.get();
       const listings = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      
+      // FIX: Sort in memory instead
+      listings.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      
       res.json(listings);
     } catch (error) {
       console.error("Error fetching listings:", error);
@@ -167,7 +192,8 @@ async function startServer() {
   // --- Bounties ---
   app.get("/api/bounties", async (req: Request, res: Response) => {
     try {
-      let query: any = db.collection(COLLECTIONS.BOUNTIES).orderBy("createdAt", "desc");
+      // FIX: Removed .orderBy() to prevent Composite Index errors
+      let query: any = db.collection(COLLECTIONS.BOUNTIES);
       
       if (req.query.userId) {
         query = query.where("posterId", "==", req.query.userId);
@@ -175,6 +201,10 @@ async function startServer() {
 
       const snapshot = await query.get();
       const bounties = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      
+      // FIX: Sort in memory instead
+      bounties.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      
       res.json(bounties);
     } catch (error) {
       console.error("Error fetching bounties:", error);
