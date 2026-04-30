@@ -3,22 +3,12 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/
 import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-let app: any = null;
-let db: any = null;
-let auth: any = null;
-
-try {
-  if (firebaseConfig && firebaseConfig.apiKey) {
-    app = initializeApp(firebaseConfig);
-    db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-    auth = getAuth(app);
-  }
-} catch (e) {
-  console.error("Firebase initialization failed:", e);
-}
-
-export { app, db, auth };
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+export { app };
 
 export const signInWithGoogle = async () => {
   if (!auth) {
