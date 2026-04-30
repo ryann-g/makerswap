@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "image": { "type": "string", "format": "uri" },
+        "universityOrg": { "type": "string" },
+        "bio": { "type": "string" }
+      },
+      "required": ["name", "email"]
+    },
+    "Listing": {
+      "title": "Listing",
+      "description": "Hardware marketplace listing",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string", "enum": ["SENSORS", "MICROCONTROLLERS", "ACTUATORS", "PASSIVES", "TOOLS", "OTHER"] },
+        "condition": { "type": "string", "enum": ["NEW", "USED", "SALVAGED"] },
+        "contactLink": { "type": "string", "format": "uri" },
+        "status": { "type": "string", "enum": ["AVAILABLE", "SOLD"] },
+        "sellerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "price", "category", "condition", "sellerId", "createdAt"]
+    },
+    "Bounty": {
+      "title": "Bounty",
+      "description": "Project bounty task",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "budget": { "type": "number" },
+        "status": { "type": "string", "enum": ["OPEN", "IN_PROGRESS", "COMPLETED"] },
+        "posterId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "budget", "status", "posterId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles collections"
+    },
+    "listings/{listingId}": {
+      "schema": "Listing",
+      "description": "Marketplace listings collection"
+    },
+    "bounties/{bountyId}": {
+      "schema": "Bounty",
+      "description": "Project bounties collection"
+    }
+  }
+}
