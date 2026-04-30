@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { getUserListings, getUserBounties, updateListingStatus, updateBountyStatus, deleteListing, deleteBounty } from '@/services/db';
+import { api } from '@/services/api';
 import { Listing, Bounty, ListingStatus, BountyStatus } from '@/types';
 import { 
   Tabs, 
@@ -28,7 +28,7 @@ import {
 import { toast } from 'sonner';
 
 export function DashboardView() {
-  const { user } = useAuth();
+  const { user, getToken } = useAuth();
   const [listings, setListings] = useState<Listing[]>([]);
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,13 +36,18 @@ export function DashboardView() {
   const fetchData = async () => {
     if (!user) return;
     setLoading(true);
-    const [l, b] = await Promise.all([
-      getUserListings(user.uid),
-      getUserBounties(user.uid)
-    ]);
-    setListings(l);
-    setBounties(b);
-    setLoading(false);
+    try {
+      const [l, b] = await Promise.all([
+        api.getListings(undefined, user.uid),
+        api.getBounties(user.uid)
+      ]);
+      setListings(l);
+      setBounties(b);
+    } catch (error) {
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -50,32 +55,56 @@ export function DashboardView() {
   }, [user]);
 
   const handleMarkListingSold = async (id: string, currentStatus: ListingStatus) => {
-    const nextStatus = currentStatus === ListingStatus.AVAILABLE ? ListingStatus.SOLD : ListingStatus.AVAILABLE;
-    await updateListingStatus(id, nextStatus);
-    toast.success(`Listing marked as ${nextStatus.toLowerCase()}`);
-    fetchData();
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const nextStatus = currentStatus === ListingStatus.AVAILABLE ? ListingStatus.SOLD : ListingStatus.AVAILABLE;
+      await api.updateListing(id, { status: nextStatus }, token);
+      toast.success(`Listing marked as ${nextStatus.toLowerCase()}`);
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to update listing');
+    }
   };
 
   const handleMarkBountyCompleted = async (id: string, currentStatus: BountyStatus) => {
-    const nextStatus = currentStatus === BountyStatus.OPEN ? BountyStatus.COMPLETED : BountyStatus.OPEN;
-    await updateBountyStatus(id, nextStatus);
-    toast.success(`Bounty marked as ${nextStatus.toLowerCase()}`);
-    fetchData();
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const nextStatus = currentStatus === BountyStatus.OPEN ? BountyStatus.COMPLETED : BountyStatus.OPEN;
+      await api.updateBounty(id, { status: nextStatus }, token);
+      toast.success(`Bounty marked as ${nextStatus.toLowerCase()}`);
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to update bounty');
+    }
   };
 
   const handleDeleteListing = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this listing?')) {
-      await deleteListing(id);
-      toast.success('Listing deleted');
-      fetchData();
+      try {
+        const token = await getToken();
+        if (!token) return;
+        await api.deleteListing(id, token);
+        toast.success('Listing deleted');
+        fetchData();
+      } catch (error) {
+        toast.error('Failed to delete listing');
+      }
     }
   };
 
   const handleDeleteBounty = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this bounty?')) {
-      await deleteBounty(id);
-      toast.success('Bounty deleted');
-      fetchData();
+      try {
+        const token = await getToken();
+        if (!token) return;
+        await api.deleteBounty(id, token);
+        toast.success('Bounty deleted');
+        fetchData();
+      } catch (error) {
+        toast.error('Failed to delete bounty');
+      }
     }
   };
 
