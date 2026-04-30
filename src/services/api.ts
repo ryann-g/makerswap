@@ -13,7 +13,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'An unknown error occurred' }));
-    throw new Error(error.error || 'Request failed');
+    console.error(`API Error [${path}]:`, error);
+    throw new Error(error.details || error.error || 'Request failed');
   }
 
   return response.json();
