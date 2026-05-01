@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { Listing, Category, Condition } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { cn, formatFirestoreDate } from '@/lib/utils';
@@ -83,9 +84,7 @@ export function MarketplaceView() {
       setListings(data);
       setLoading(false);
     }, (error) => {
-      console.error('Firestore Error:', error);
-      toast.error('Failed to load listings from database');
-      setLoading(false);
+      handleFirestoreError(error, OperationType.LIST, 'listings');
     });
 
     return () => unsubscribe();
@@ -109,7 +108,7 @@ export function MarketplaceView() {
         status: 'OPEN',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'listings'));
       
       toast.success('Listing created successfully!');
       setIsAdding(false);
