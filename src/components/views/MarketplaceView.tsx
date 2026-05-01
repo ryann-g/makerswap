@@ -66,8 +66,9 @@ export function MarketplaceView() {
     try {
       const data = await api.getListings(categoryFilter === 'ALL' ? undefined : categoryFilter);
       setListings(data);
-    } catch (error) {
-      toast.error('Failed to load listings');
+    } catch (error: any) {
+      console.error('Failed to load listings:', error);
+      toast.error(`Failed to load listings: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
