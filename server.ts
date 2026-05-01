@@ -17,51 +17,64 @@ if (fs.existsSync(configPath)) {
   firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
 }
 
-// Initialize Firebase Admin
-let db: any;
-let auth: any;
+  // Initialize Firebase Admin
+  let db: any;
+  let auth: any;
 
-try {
-  // MUST DOWNLOAD THIS FROM FIREBASE CONSOLE -> PROJECT SETTINGS -> SERVICE ACCOUNTS
-  const serviceAccountPath = path.join(process.cwd(), "serviceAccountKey.json");
-  let app: any;
+  const initializeFirebase = () => {
+    try {
+      const rootDir = process.cwd();
+      const serviceAccountPath = path.resolve(rootDir, "serviceAccountKey.json");
+      console.log("Initializing Firebase Admin. CWD:", rootDir);
+      
+      let app: any;
 
-  if (fs.existsSync(serviceAccountPath)) {
-    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
-    app = initializeApp({
-      credential: cert(serviceAccount),
-      projectId: firebaseConfig.projectId
-    });
-    console.log("Firebase Admin initialized successfully with serviceAccountKey.json.");
-  } else {
-    console.warn("serviceAccountKey.json not found, falling back to ADC/Config.");
-    const projectId = firebaseConfig.projectId;
-    if (getApps().length === 0) {
-      app = initializeApp({
-        projectId: projectId,
-        credential: applicationDefault(),
-      });
-    } else {
-      app = getApp();
+      if (fs.existsSync(serviceAccountPath)) {
+        const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
+        console.log("Service Account Key found for project:", serviceAccount.project_id);
+        
+        if (getApps().length === 0) {
+          app = initializeApp({
+            credential: cert(serviceAccount),
+            projectId: firebaseConfig.projectId || serviceAccount.project_id
+          });
+        } else {
+          app = getApp();
+        }
+      } else {
+        console.warn("serviceAccountKey.json not found, falling back to ADC.");
+        if (getApps().length === 0) {
+          app = initializeApp({
+            projectId: firebaseConfig.projectId,
+            credential: applicationDefault(),
+          });
+        } else {
+          app = getApp();
+        }
+      }
+      
+      const databaseId = (firebaseConfig.firestoreDatabaseId || "(default)").trim();
+      db = getFirestore(app, databaseId);
+      auth = getAuth(app);
+      
+      // Verification
+      db.listCollections()
+        .then((cols: any) => {
+          console.log(`Successfully connected to database: ${databaseId}. Found ${cols.length} collections.`);
+        })
+        .catch((err: any) => {
+          console.error(`Error connecting to database ${databaseId}:`, err.message);
+          if (databaseId !== "(default)") {
+            console.log("Attempting fallback to (default) database...");
+            db = getFirestore(app, "(default)");
+          }
+        });
+    } catch (e) {
+      console.error("Firebase Admin initialization fatal error:", e);
     }
-  }
-  
-  // Use Explicit Database ID from config
-  const databaseId = (firebaseConfig.firestoreDatabaseId || "(default)").trim();
-  db = getFirestore(app, databaseId);
-  auth = getAuth(app);
-  
-  console.log("Firebase Admin Ready");
-  console.log(" - Project ID:", firebaseConfig.projectId);
-  console.log(" - Database ID:", databaseId);
+  };
 
-  // Test connection
-  db.collection("listings").limit(1).get()
-    .then((snap: any) => console.log(`Database connectivity test successful. Found ${snap.size} listings.`))
-    .catch((err: any) => console.error("Database connectivity test failed:", err.message));
-} catch (e) {
-  console.error("Firebase Admin initialization failed:", e);
-}
+  initializeFirebase();
 
 // Helper to normalize timestamps for sorting
 const getTimestamp = (val: any): number => {
@@ -87,6 +100,29 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+
+  // Internal test endpoint to check database access
+  app.get("/api/admin/test", async (req, res) => {
+    try {
+      if (!db) return res.status(500).json({ error: "DB not initialized" });
+      const collections = await db.listCollections();
+      const listingCount = await db.collection("listings").count().get();
+      res.json({
+        initialized: true,
+        project: firebaseConfig.projectId,
+        database: (firebaseConfig.firestoreDatabaseId || "(default)").trim(),
+        collections: collections.map((c: any) => c.id),
+        listingCount: listingCount.data().count
+      });
+    } catch (error: any) {
+      res.status(500).json({ 
+        error: "Test failed", 
+        message: error.message,
+        stack: error.stack,
+        code: error.code
+      });
+    }
+  });
 
   // Health check
   app.get("/api/health", async (req, res) => {
