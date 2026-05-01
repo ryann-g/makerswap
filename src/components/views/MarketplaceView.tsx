@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
-import { Listing, Category, Condition } from '@/types';
+import { Listing, Category, Condition, ListingStatus } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { cn, formatFirestoreDate } from '@/lib/utils';
 import { 
@@ -105,7 +105,7 @@ export function MarketplaceView() {
         price: parseFloat(newListing.price) || 0,
         sellerName: profile.name,
         sellerId: user.uid,
-        status: 'OPEN',
+        status: ListingStatus.AVAILABLE,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'listings'));

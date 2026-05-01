@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log("Checking Firestore for profile...");
           try {
             const userRef = doc(db, 'users', user.uid);
-            const userSnap = await getDoc(userRef).catch(err => handleFirestoreError(err, OperationType.GET, 'users/' + user.uid));
+            const userSnap = await getDoc(userRef);
             
             if (userSnap.exists()) {
               console.log("Profile found in Firestore");
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
               };
-              await setDoc(userRef, newProfileData).catch(err => handleFirestoreError(err, OperationType.WRITE, 'users/' + user.uid));
+              await setDoc(userRef, newProfileData);
               console.log("Profile created successfully");
               setProfile({ 
                 id: user.uid, 
@@ -107,8 +107,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await updateDoc(userRef, {
           ...data,
           updatedAt: serverTimestamp()
-        }).catch(err => handleFirestoreError(err, OperationType.UPDATE, 'users/' + user.uid));
-        const updated = await getDoc(userRef).catch(err => handleFirestoreError(err, OperationType.GET, 'users/' + user.uid));
+        });
+        const updated = await getDoc(userRef);
         if (updated.exists()) {
           const updatedData = updated.data();
           setProfile({ 
