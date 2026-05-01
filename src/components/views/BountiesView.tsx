@@ -50,8 +50,9 @@ export function BountiesView() {
     try {
       const data = await api.getBounties();
       setBounties(data);
-    } catch (error) {
-      toast.error('Failed to load bounties');
+    } catch (error: any) {
+      console.error('Failed to load bounties:', error);
+      toast.error(`Failed to load bounties: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }

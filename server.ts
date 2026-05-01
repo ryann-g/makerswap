@@ -21,7 +21,7 @@ if (fs.existsSync(configPath)) {
   let db: any;
   let auth: any;
 
-  const initializeFirebase = () => {
+  const initializeFirebase = async () => {
     try {
       const rootDir = process.cwd();
       const serviceAccountPath = path.resolve(rootDir, "serviceAccountKey.json");
@@ -54,27 +54,37 @@ if (fs.existsSync(configPath)) {
       }
       
       const databaseId = (firebaseConfig.firestoreDatabaseId || "(default)").trim();
-      db = getFirestore(app, databaseId);
-      auth = getAuth(app);
+      console.log(`Attempting to use database: ${databaseId}`);
+      const dbInstance = getFirestore(app, databaseId);
       
-      // Verification
-      db.listCollections()
-        .then((cols: any) => {
-          console.log(`Successfully connected to database: ${databaseId}. Found ${cols.length} collections.`);
-        })
-        .catch((err: any) => {
-          console.error(`Error connecting to database ${databaseId}:`, err.message);
-          if (databaseId !== "(default)") {
-            console.log("Attempting fallback to (default) database...");
-            db = getFirestore(app, "(default)");
+      try {
+        // Verification call
+        await dbInstance.listCollections();
+        console.log(`Successfully connected to database: ${databaseId}`);
+        db = dbInstance;
+      } catch (err: any) {
+        console.error(`Error connecting to database ${databaseId}:`, err.message);
+        if (databaseId !== "(default)") {
+          console.log("Attempting fallback to (default) database...");
+          const defaultDb = getFirestore(app, "(default)");
+          try {
+            await defaultDb.listCollections();
+            console.log("Successfully connected to (default) database.");
+            db = defaultDb;
+          } catch (defaultErr: any) {
+            console.error("Default database also inaccessible:", defaultErr.message);
+            db = dbInstance;
           }
-        });
+        } else {
+          db = dbInstance;
+        }
+      }
+      
+      auth = getAuth(app);
     } catch (e) {
       console.error("Firebase Admin initialization fatal error:", e);
     }
   };
-
-  initializeFirebase();
 
 // Helper to normalize timestamps for sorting
 const getTimestamp = (val: any): number => {
@@ -96,6 +106,7 @@ interface AuthRequest extends Request {
 }
 
 async function startServer() {
+  await initializeFirebase();
   const app = express();
   const PORT = 3000;
 
@@ -124,20 +135,22 @@ async function startServer() {
     }
   });
 
-  // Health check
-  app.get("/api/health", async (req, res) => {
-    try {
-      await db.collection("health").doc("check").get();
-      res.json({ status: "ok", database: "connected" });
-    } catch (error: any) {
-      res.status(500).json({ status: "error", message: error.message });
-    }
-  });
-
   // Log all requests
   app.use((req, res, next) => {
     console.log(`${req.method} ${req.url}`);
     next();
+  });
+
+  // Health check
+  app.get("/api/health", async (req, res) => {
+    try {
+      if (!db) throw new Error("Database not initialized");
+      await db.collection("health").doc("check").get();
+      res.json({ status: "ok", database: "connected" });
+    } catch (error: any) {
+      console.error("Health check failed:", error.message);
+      res.status(500).json({ status: "error", message: error.message });
+    }
   });
 
   // --- API Routes ---
@@ -365,6 +378,16 @@ async function startServer() {
       console.error("Error updating user profile:", error);
       res.status(500).json({ error: "Failed to update user" });
     }
+  });
+
+  // Global Error Handler - MUST BE LAST
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    console.error("Unhandled Server Error:", err);
+    res.status(500).json({ 
+      error: "Internal Server Error", 
+      details: err.message,
+      path: req.path
+    });
   });
 
   // --- Vite Middleware ---

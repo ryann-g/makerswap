@@ -12,9 +12,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'An unknown error occurred' }));
-    console.error(`API Error [${path}]:`, error);
-    throw new Error(error.details || error.error || 'Request failed');
+    let errorMessage = 'Request failed';
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.details || errorData.error || errorMessage;
+    } catch (e) {
+      // If it's not JSON, it might be an HTML error page or plain text
+      const text = await response.text().catch(() => 'No response body');
+      console.error(`API Error [${path}]: Status ${response.status} ${response.statusText}`, text.substring(0, 500));
+      errorMessage = `Server Error (${response.status}): ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
   }
 
   return response.json();
