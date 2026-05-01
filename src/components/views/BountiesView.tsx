@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { Bounty, BountyStatus } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { formatFirestoreDate } from '@/lib/utils';
@@ -63,9 +64,7 @@ export function BountiesView() {
       setBounties(data);
       setLoading(false);
     }, (error) => {
-      console.error('Firestore Error:', error);
-      toast.error('Failed to load bounties from database');
-      setLoading(false);
+      handleFirestoreError(error, OperationType.LIST, 'bounties');
     });
 
     return () => unsubscribe();
@@ -84,7 +83,7 @@ export function BountiesView() {
         status: BountyStatus.OPEN,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'bounties'));
       
       toast.success('Bounty posted successfully!');
       setIsAdding(false);

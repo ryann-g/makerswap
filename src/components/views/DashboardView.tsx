@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { useAuth } from '@/hooks/useAuth';
 import { formatFirestoreDate } from '@/lib/utils';
 import { Listing, Bounty, ListingStatus, BountyStatus } from '@/types';
@@ -52,6 +53,8 @@ export function DashboardView() {
         ...d.data(),
         createdAt: formatFirestoreDate(d.data().createdAt)
       } as Listing)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'listings (user dashboard)');
     });
 
     // Listen to bounties
@@ -67,6 +70,8 @@ export function DashboardView() {
         createdAt: formatFirestoreDate(d.data().createdAt)
       } as Bounty)));
       setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'bounties (user dashboard)');
     });
 
     return () => {
@@ -79,9 +84,13 @@ export function DashboardView() {
     try {
       if (!db) return;
       const nextStatus = currentStatus === ListingStatus.AVAILABLE ? ListingStatus.SOLD : ListingStatus.AVAILABLE;
-      await updateDoc(doc(db, 'listings', id), { status: nextStatus });
+      await updateDoc(doc(db, 'listings', id), { 
+        status: nextStatus,
+        updatedAt: serverTimestamp() 
+      }).catch(err => handleFirestoreError(err, OperationType.UPDATE, 'listings/' + id));
       toast.success(`Listing marked as ${nextStatus.toLowerCase()}`);
     } catch (error) {
+      console.error('Update error:', error);
       toast.error('Failed to update listing');
     }
   };
@@ -90,9 +99,13 @@ export function DashboardView() {
     try {
       if (!db) return;
       const nextStatus = currentStatus === BountyStatus.OPEN ? BountyStatus.COMPLETED : BountyStatus.OPEN;
-      await updateDoc(doc(db, 'bounties', id), { status: nextStatus });
+      await updateDoc(doc(db, 'bounties', id), { 
+        status: nextStatus,
+        updatedAt: serverTimestamp()
+      }).catch(err => handleFirestoreError(err, OperationType.UPDATE, 'bounties/' + id));
       toast.success(`Bounty marked as ${nextStatus.toLowerCase()}`);
     } catch (error) {
+      console.error('Update error:', error);
       toast.error('Failed to update bounty');
     }
   };
@@ -101,9 +114,10 @@ export function DashboardView() {
     if (window.confirm('Are you sure you want to delete this listing?')) {
       try {
         if (!db) return;
-        await deleteDoc(doc(db, 'listings', id));
+        await deleteDoc(doc(db, 'listings', id)).catch(err => handleFirestoreError(err, OperationType.DELETE, 'listings/' + id));
         toast.success('Listing deleted');
       } catch (error) {
+        console.error('Delete error:', error);
         toast.error('Failed to delete listing');
       }
     }
@@ -113,9 +127,10 @@ export function DashboardView() {
     if (window.confirm('Are you sure you want to delete this bounty?')) {
       try {
         if (!db) return;
-        await deleteDoc(doc(db, 'bounties', id));
+        await deleteDoc(doc(db, 'bounties', id)).catch(err => handleFirestoreError(err, OperationType.DELETE, 'bounties/' + id));
         toast.success('Bounty deleted');
       } catch (error) {
+        console.error('Delete error:', error);
         toast.error('Failed to delete bounty');
       }
     }

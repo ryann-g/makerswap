@@ -38,6 +38,7 @@ service cloud.firestore {
                user.uid == request.auth.uid &&
                user.name is string && user.name.size() <= 100 &&
                user.email is string && user.email.size() <= 100 &&
+               (!('image' in user) || (user.image is string && user.image.size() <= 1000)) &&
                (!('universityOrg' in user) || (user.universityOrg is string && user.universityOrg.size() <= 100)) &&
                (!('bio' in user) || (user.bio is string && user.bio.size() <= 1000)) &&
                (!('createdAt' in user) || (user.createdAt is timestamp || user.createdAt is number)) &&

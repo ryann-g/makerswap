@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, signInWithGoogle, logout } from '../lib/firebase';
+import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { UserProfile } from '../types';
 import { toast } from 'sonner';
 
@@ -28,17 +29,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log("Auth state changed:", user ? `UID: ${user.uid}` : "Logged out");
       try {
         setUser(user);
         if (user && db) {
+          console.log("Checking Firestore for profile...");
           try {
             const userRef = doc(db, 'users', user.uid);
-            const userSnap = await getDoc(userRef);
+            const userSnap = await getDoc(userRef).catch(err => handleFirestoreError(err, OperationType.GET, 'users/' + user.uid));
             
             if (userSnap.exists()) {
-              setProfile({ id: userSnap.id, ...userSnap.data() } as any);
+              console.log("Profile found in Firestore");
+              const data = userSnap.data();
+              setProfile({ 
+                id: userSnap.id, 
+                ...data,
+                createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+                updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+              } as any);
             } else {
-              // If the user profile doesn't exist, create it
+              console.log("No profile found, creating one...");
               const newProfileData = {
                 uid: user.uid,
                 name: user.displayName || 'Anonymous User',
@@ -47,12 +57,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
               };
-              await setDoc(userRef, newProfileData);
-              setProfile({ id: user.uid, ...newProfileData } as any);
+              await setDoc(userRef, newProfileData).catch(err => handleFirestoreError(err, OperationType.WRITE, 'users/' + user.uid));
+              console.log("Profile created successfully");
+              setProfile({ 
+                id: user.uid, 
+                ...newProfileData,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              } as any);
             }
           } catch (error: any) {
-            console.error("Profile sync error:", error);
-            // Don't show toast on every retry, but log it
+            console.error("Profile sync error detailed:", error);
+            toast.error("Failed to sync your profile. You may have limited access.");
           }
         } else {
           setProfile(null);
@@ -91,10 +107,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await updateDoc(userRef, {
           ...data,
           updatedAt: serverTimestamp()
-        });
-        const updated = await getDoc(userRef);
+        }).catch(err => handleFirestoreError(err, OperationType.UPDATE, 'users/' + user.uid));
+        const updated = await getDoc(userRef).catch(err => handleFirestoreError(err, OperationType.GET, 'users/' + user.uid));
         if (updated.exists()) {
-          setProfile({ id: updated.id, ...updated.data() } as any);
+          const updatedData = updated.data();
+          setProfile({ 
+            id: updated.id, 
+            ...updatedData,
+            createdAt: updatedData.createdAt?.toDate?.()?.toISOString() || updatedData.createdAt,
+            updatedAt: updatedData.updatedAt?.toDate?.()?.toISOString() || updatedData.updatedAt,
+          } as any);
         }
       } catch (error) {
         console.error("Update profile error:", error);
