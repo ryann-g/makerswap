@@ -60,14 +60,17 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isOwner(existing().sellerId);
 
       function isValidListing(listing) {
-        return listing.title is string && listing.title.size() <= 100 &&
+        return listing.title is string && listing.title.size() >= 2 && listing.title.size() <= 100 &&
                listing.description is string && listing.description.size() <= 2000 &&
                listing.price is number && listing.price >= 0 &&
                listing.category in ['SENSORS', 'MICROCONTROLLERS', 'ACTUATORS', 'PASSIVES', 'TOOLS', 'OTHER'] &&
                listing.condition in ['NEW', 'USED', 'SALVAGED'] &&
                listing.status in ['AVAILABLE', 'SOLD'] &&
                listing.sellerId == request.auth.uid &&
-               (listing.createdAt is timestamp || listing.createdAt is number);
+               (!('contactLink' in listing) || (listing.contactLink is string && listing.contactLink.size() <= 500)) &&
+               (!('sellerName' in listing) || (listing.sellerName is string && listing.sellerName.size() <= 100)) &&
+               (listing.createdAt is timestamp || listing.createdAt is number) &&
+               (!('updatedAt' in listing) || (listing.updatedAt is timestamp || listing.updatedAt is number));
       }
     }
 
@@ -85,12 +88,14 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isOwner(existing().posterId);
 
       function isValidBounty(bounty) {
-        return bounty.title is string && bounty.title.size() <= 100 &&
+        return bounty.title is string && bounty.title.size() >= 2 && bounty.title.size() <= 100 &&
                bounty.description is string && bounty.description.size() <= 2000 &&
                bounty.budget is number && bounty.budget >= 0 &&
                bounty.status in ['OPEN', 'IN_PROGRESS', 'COMPLETED'] &&
                bounty.posterId == request.auth.uid &&
-               (bounty.createdAt is timestamp || bounty.createdAt is number);
+               (!('posterName' in bounty) || (bounty.posterName is string && bounty.posterName.size() <= 100)) &&
+               (bounty.createdAt is timestamp || bounty.createdAt is number) &&
+               (!('updatedAt' in bounty) || (bounty.updatedAt is timestamp || bounty.updatedAt is number));
       }
     }
   }
