@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { api } from '@/services/api';
+import { formatFirestoreDate } from '@/lib/utils';
 import { Listing, Bounty, ListingStatus, BountyStatus } from '@/types';
 import { 
   Tabs, 
@@ -33,35 +35,52 @@ export function DashboardView() {
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const [l, b] = await Promise.all([
-        api.getListings(undefined, user.uid),
-        api.getBounties(user.uid)
-      ]);
-      setListings(l);
-      setBounties(b);
-    } catch (error) {
-      toast.error('Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchData();
+    if (!user || !db) return;
+
+    setLoading(true);
+    
+    // Listen to listings
+    const qListings = query(
+      collection(db, 'listings'), 
+      where('sellerId', '==', user.uid), 
+      orderBy('createdAt', 'desc')
+    );
+    const unsubscribeListings = onSnapshot(qListings, (snapshot) => {
+      setListings(snapshot.docs.map(d => ({ 
+        id: d.id, 
+        ...d.data(),
+        createdAt: formatFirestoreDate(d.data().createdAt)
+      } as Listing)));
+    });
+
+    // Listen to bounties
+    const qBounties = query(
+      collection(db, 'bounties'), 
+      where('posterId', '==', user.uid), 
+      orderBy('createdAt', 'desc')
+    );
+    const unsubscribeBounties = onSnapshot(qBounties, (snapshot) => {
+      setBounties(snapshot.docs.map(d => ({ 
+        id: d.id, 
+        ...d.data(),
+        createdAt: formatFirestoreDate(d.data().createdAt)
+      } as Bounty)));
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribeListings();
+      unsubscribeBounties();
+    };
   }, [user]);
 
   const handleMarkListingSold = async (id: string, currentStatus: ListingStatus) => {
     try {
-      const token = await getToken();
-      if (!token) return;
+      if (!db) return;
       const nextStatus = currentStatus === ListingStatus.AVAILABLE ? ListingStatus.SOLD : ListingStatus.AVAILABLE;
-      await api.updateListing(id, { status: nextStatus }, token);
+      await updateDoc(doc(db, 'listings', id), { status: nextStatus });
       toast.success(`Listing marked as ${nextStatus.toLowerCase()}`);
-      fetchData();
     } catch (error) {
       toast.error('Failed to update listing');
     }
@@ -69,12 +88,10 @@ export function DashboardView() {
 
   const handleMarkBountyCompleted = async (id: string, currentStatus: BountyStatus) => {
     try {
-      const token = await getToken();
-      if (!token) return;
+      if (!db) return;
       const nextStatus = currentStatus === BountyStatus.OPEN ? BountyStatus.COMPLETED : BountyStatus.OPEN;
-      await api.updateBounty(id, { status: nextStatus }, token);
+      await updateDoc(doc(db, 'bounties', id), { status: nextStatus });
       toast.success(`Bounty marked as ${nextStatus.toLowerCase()}`);
-      fetchData();
     } catch (error) {
       toast.error('Failed to update bounty');
     }
@@ -83,11 +100,9 @@ export function DashboardView() {
   const handleDeleteListing = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this listing?')) {
       try {
-        const token = await getToken();
-        if (!token) return;
-        await api.deleteListing(id, token);
+        if (!db) return;
+        await deleteDoc(doc(db, 'listings', id));
         toast.success('Listing deleted');
-        fetchData();
       } catch (error) {
         toast.error('Failed to delete listing');
       }
@@ -97,11 +112,9 @@ export function DashboardView() {
   const handleDeleteBounty = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this bounty?')) {
       try {
-        const token = await getToken();
-        if (!token) return;
-        await api.deleteBounty(id, token);
+        if (!db) return;
+        await deleteDoc(doc(db, 'bounties', id));
         toast.success('Bounty deleted');
-        fetchData();
       } catch (error) {
         toast.error('Failed to delete bounty');
       }

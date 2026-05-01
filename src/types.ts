@@ -25,6 +25,7 @@ export enum BountyStatus {
 }
 
 export interface UserProfile {
+  id: string; // The uid from Firestore document ID
   uid: string;
   name: string;
   email: string;
@@ -44,7 +45,7 @@ export interface Listing {
   status: ListingStatus;
   sellerId: string;
   sellerName: string;
-  createdAt: number; // UTC timestamp
+  createdAt: string; // ISO string normalized from Firestore
 }
 
 export interface Bounty {
@@ -55,7 +56,7 @@ export interface Bounty {
   status: BountyStatus;
   posterId: string;
   posterName: string;
-  createdAt: number; // UTC timestamp
+  createdAt: string; // ISO string normalized from Firestore
 }
 
 export enum OperationType {

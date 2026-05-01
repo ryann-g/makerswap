@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '@/services/api';
-import { Listing, Category, Condition, ListingStatus } from '@/types';
+import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Listing, Category, Condition } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
+import { cn, formatFirestoreDate } from '@/lib/utils';
 import { 
   Card, 
   CardContent, 
@@ -61,21 +63,32 @@ export function MarketplaceView() {
     contactLink: ''
   });
 
-  const fetchListings = async () => {
-    setLoading(true);
-    try {
-      const data = await api.getListings(categoryFilter === 'ALL' ? undefined : categoryFilter);
-      setListings(data);
-    } catch (error: any) {
-      console.error('Failed to load listings:', error);
-      toast.error(`Failed to load listings: ${error.message || 'Unknown error'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchListings();
+    if (!db) return;
+
+    setLoading(true);
+    let q = query(collection(db, 'listings'), orderBy('createdAt', 'desc'));
+
+    if (categoryFilter !== 'ALL') {
+      q = query(collection(db, 'listings'), where('category', '==', categoryFilter), orderBy('createdAt', 'desc'));
+    }
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: formatFirestoreDate(doc.data().createdAt)
+      })) as Listing[];
+      
+      setListings(data);
+      setLoading(false);
+    }, (error) => {
+      console.error('Firestore Error:', error);
+      toast.error('Failed to load listings from database');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [categoryFilter]);
 
   const filteredListings = listings.filter(l => 
@@ -85,17 +98,19 @@ export function MarketplaceView() {
 
   const handleAddListing = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !profile) return;
+    if (!user || !profile || !db) return;
 
     try {
-      const token = await getToken();
-      if (!token) throw new Error('Not authenticated');
-
-      await api.createListing({
+      await addDoc(collection(db, 'listings'), {
         ...newListing,
         price: parseFloat(newListing.price) || 0,
         sellerName: profile.name,
-      }, token);
+        sellerId: user.uid,
+        status: 'OPEN',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      
       toast.success('Listing created successfully!');
       setIsAdding(false);
       setNewListing({
@@ -106,9 +121,9 @@ export function MarketplaceView() {
         condition: Condition.USED,
         contactLink: ''
       });
-      fetchListings();
-    } catch (error) {
-      toast.error('Failed to create listing');
+    } catch (error: any) {
+      console.error('Create listing error:', error);
+      toast.error(`Failed to create listing: ${error.message}`);
     }
   };
 
