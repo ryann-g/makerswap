@@ -114,30 +114,42 @@ async function startServer() {
 
   // Internal test endpoint to check database access
   app.get("/api/admin/test", async (req, res) => {
+    console.log("Diagnostic: /api/admin/test called");
     try {
       if (!db) return res.status(500).json({ error: "DB not initialized" });
       const collections = await db.listCollections();
-      const listingCount = await db.collection("listings").count().get();
       res.json({
         initialized: true,
         project: firebaseConfig.projectId,
         database: (firebaseConfig.firestoreDatabaseId || "(default)").trim(),
-        collections: collections.map((c: any) => c.id),
-        listingCount: listingCount.data().count
+        collections: collections.map((c: any) => c.id)
       });
     } catch (error: any) {
+      console.error("Diagnostic test failed:", error);
       res.status(500).json({ 
         error: "Test failed", 
         message: error.message,
-        stack: error.stack,
         code: error.code
       });
     }
   });
 
+  app.get("/api/ping", (req, res) => {
+    res.json({ message: "pong", time: new Date().toISOString() });
+  });
+
+  app.get("/debug", (req, res) => {
+    res.json({
+      env: process.env.NODE_ENV,
+      cwd: process.cwd(),
+      firebaseProject: firebaseConfig.projectId,
+      dbInitialized: !!db
+    });
+  });
+
   // Log all requests
   app.use((req, res, next) => {
-    console.log(`${req.method} ${req.url}`);
+    console.log(`[REQUEST] ${req.method} ${req.url}`);
     next();
   });
 
