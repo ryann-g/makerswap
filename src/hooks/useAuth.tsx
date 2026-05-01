@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, signInWithGoogle, logout } from '../lib/firebase';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db, signInWithGoogle, logout } from '../lib/firebase';
 import { UserProfile } from '../types';
-import { api } from '../services/api';
 import { toast } from 'sonner';
 
 interface AuthContextType {
@@ -30,28 +30,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       try {
         setUser(user);
-        if (user) {
+        if (user && db) {
           try {
-            let p = await api.getUserProfile(user.uid);
-            setProfile(p);
+            const userRef = doc(db, 'users', user.uid);
+            const userSnap = await getDoc(userRef);
+            
+            if (userSnap.exists()) {
+              setProfile({ id: userSnap.id, ...userSnap.data() } as any);
+            } else {
+              // If the user profile doesn't exist, create it
+              const newProfileData = {
+                uid: user.uid,
+                name: user.displayName || 'Anonymous User',
+                email: user.email || '',
+                image: user.photoURL || '',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              };
+              await setDoc(userRef, newProfileData);
+              setProfile({ id: user.uid, ...newProfileData } as any);
+            }
           } catch (error: any) {
-            // If the user profile doesn't exist, create it
-            const newProfile = {
-              uid: user.uid,
-              name: user.displayName || 'Anonymous User',
-              email: user.email || '',
-              image: user.photoURL || '',
-            };
-            const token = await user.getIdToken();
-            await api.updateUserProfile(user.uid, newProfile, token);
-            setProfile(newProfile as UserProfile);
+            console.error("Profile sync error:", error);
+            // Don't show toast on every retry, but log it
           }
         } else {
           setProfile(null);
         }
       } catch (error) {
         console.error("Auth state change error:", error);
-        toast.error("Profile synchronization failed. Check if Firestore rules are deployed.");
       } finally {
         setLoading(false);
       }
@@ -78,13 +85,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateProfile = async (data: Partial<UserProfile>) => {
-    if (user) {
+    if (user && db) {
       try {
-        const token = await getToken();
-        if (!token) throw new Error('Not authenticated');
-        await api.updateUserProfile(user.uid, data, token);
-        const updated = await api.getUserProfile(user.uid);
-        setProfile(updated);
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          ...data,
+          updatedAt: serverTimestamp()
+        });
+        const updated = await getDoc(userRef);
+        if (updated.exists()) {
+          setProfile({ id: updated.id, ...updated.data() } as any);
+        }
       } catch (error) {
         console.error("Update profile error:", error);
         throw error;

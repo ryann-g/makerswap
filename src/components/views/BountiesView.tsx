@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '@/services/api';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { Bounty, BountyStatus } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
+import { formatFirestoreDate } from '@/lib/utils';
 import { 
   Card, 
   CardContent, 
@@ -45,42 +47,51 @@ export function BountiesView() {
     budget: ''
   });
 
-  const fetchBounties = async () => {
-    setLoading(true);
-    try {
-      const data = await api.getBounties();
-      setBounties(data);
-    } catch (error: any) {
-      console.error('Failed to load bounties:', error);
-      toast.error(`Failed to load bounties: ${error.message || 'Unknown error'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchBounties();
+    if (!db) return;
+
+    setLoading(true);
+    const q = query(collection(db, 'bounties'), orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: formatFirestoreDate(doc.data().createdAt)
+      })) as Bounty[];
+      
+      setBounties(data);
+      setLoading(false);
+    }, (error) => {
+      console.error('Firestore Error:', error);
+      toast.error('Failed to load bounties from database');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleAddBounty = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !profile) return;
+    if (!user || !profile || !db) return;
 
     try {
-      const token = await getToken();
-      if (!token) throw new Error('Not authenticated');
-
-      await api.createBounty({
+      await addDoc(collection(db, 'bounties'), {
         ...newBounty,
         budget: parseFloat(newBounty.budget) || 0,
         posterName: profile.name,
-      }, token);
+        posterId: user.uid,
+        status: BountyStatus.OPEN,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      
       toast.success('Bounty posted successfully!');
       setIsAdding(false);
       setNewBounty({ title: '', description: '', budget: '' });
-      fetchBounties();
-    } catch (error) {
-      toast.error('Failed to post bounty');
+    } catch (error: any) {
+      console.error('Post bounty error:', error);
+      toast.error(`Failed to post bounty: ${error.message}`);
     }
   };
 
