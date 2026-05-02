@@ -1,6 +1,6 @@
 {
   "name": "MakerSwap",
-  "description": "A local hardware exchange and project bounty platform for university ecosystems.",
+  "description": "Buy, sell, and trade electronics and prototyping components in your local makerspace community.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
