@@ -9,41 +9,33 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-export interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  }
-}
-
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
-    },
+/**
+ * Handles Firestore errors by logging technical metadata and throwing 
+ * a user-friendly error message. Prevents leaking internal state to UI.
+ */
+export function handleFirestoreError(error: any, operationType: OperationType, path: string | null) {
+  // Log technical details for developers
+  const technicalInfo = {
+    code: error?.code,
+    message: error?.message,
     operationType,
-    path
+    path,
+    uid: auth.currentUser?.uid
+  };
+  console.error('[Firestore Error Details]:', technicalInfo);
+
+  // Map Firebase error codes to friendly messages
+  let userFriendlyMessage = "An unexpected database error occurred.";
+  
+  if (error?.code === 'permission-denied') {
+    userFriendlyMessage = "Access denied. You may not have permission to perform this action or need to sign in.";
+  } else if (error?.code === 'unavailable') {
+    userFriendlyMessage = "The service is temporarily unavailable. Please check your internet connection.";
+  } else if (error?.code === 'not-found') {
+    userFriendlyMessage = "The requested item could not be found.";
+  } else if (error?.code === 'failed-precondition') {
+    userFriendlyMessage = "Query failed. This might require a database index update.";
   }
-  const serialized = JSON.stringify(errInfo);
-  console.error('Firestore Error: ', serialized);
-  throw new Error(serialized);
+
+  throw new Error(userFriendlyMessage);
 }

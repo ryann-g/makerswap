@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { Bounty, BountyStatus } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
-import { formatFirestoreDate } from '@/lib/utils';
+import { cn, formatFirestoreDate } from '@/lib/utils';
+import { bountySchema, BountyFormValues } from '@/lib/schemas';
+import { useForm, SubmitHandler } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { 
   Card, 
   CardContent, 
@@ -36,16 +39,19 @@ import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 
 export function BountiesView() {
-  const { user, profile, getToken } = useAuth();
+  const { user, profile } = useAuth();
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
 
-  // Form state
-  const [newBounty, setNewBounty] = useState({
-    title: '',
-    description: '',
-    budget: ''
+  // Zod-validated form setup
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<BountyFormValues>({
+    resolver: zodResolver(bountySchema),
+    defaultValues: {
+      title: '',
+      description: '',
+      budget: 0
+    }
   });
 
   useEffect(() => {
@@ -70,14 +76,12 @@ export function BountiesView() {
     return () => unsubscribe();
   }, []);
 
-  const handleAddBounty = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddBounty: SubmitHandler<BountyFormValues> = async (data) => {
     if (!user || !profile || !db) return;
 
     try {
       await addDoc(collection(db, 'bounties'), {
-        ...newBounty,
-        budget: parseFloat(newBounty.budget) || 0,
+        ...data,
         posterName: profile.name,
         posterId: user.uid,
         status: BountyStatus.OPEN,
@@ -87,7 +91,7 @@ export function BountiesView() {
       
       toast.success('Bounty posted successfully!');
       setIsAdding(false);
-      setNewBounty({ title: '', description: '', budget: '' });
+      reset();
     } catch (error: any) {
       console.error('Post bounty error:', error);
       toast.error(`Failed to post bounty: ${error.message}`);
@@ -111,7 +115,7 @@ export function BountiesView() {
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
-              <form onSubmit={handleAddBounty}>
+              <form onSubmit={handleSubmit(handleAddBounty)}>
                 <DialogHeader>
                   <DialogTitle>Create New Bounty</DialogTitle>
                 </DialogHeader>
@@ -120,32 +124,32 @@ export function BountiesView() {
                     <Label htmlFor="title">Task Title</Label>
                     <Input 
                       id="title" 
-                      required 
-                      value={newBounty.title} 
-                      onChange={e => setNewBounty({...newBounty, title: e.target.value})}
+                      {...register('title')}
+                      className={cn(errors.title && "border-destructive")}
                       placeholder="e.g. Soldering help for custom PCB"
                     />
+                    {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="desc">Description</Label>
                     <Textarea 
                       id="desc" 
-                      required 
-                      value={newBounty.description} 
-                      onChange={e => setNewBounty({...newBounty, description: e.target.value})}
+                      {...register('description')}
+                      className={cn(errors.description && "border-destructive")}
                       placeholder="Explain what help you need..."
                     />
+                    {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="budget">Budget (₱)</Label>
                     <Input 
                        id="budget" 
                        type="number" 
-                       required 
-                       value={newBounty.budget} 
-                       onChange={e => setNewBounty({...newBounty, budget: e.target.value})}
+                       {...register('budget', { valueAsNumber: true })}
+                       className={cn(errors.budget && "border-destructive")}
                        placeholder="Amount you're willing to pay"
                     />
+                    {errors.budget && <p className="text-xs text-destructive">{errors.budget.message}</p>}
                   </div>
                 </div>
                 <DialogFooter>

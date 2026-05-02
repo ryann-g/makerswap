@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { useAuth } from '@/hooks/useAuth';
-import { formatFirestoreDate } from '@/lib/utils';
+import { formatFirestoreDate, cn } from '@/lib/utils';
 import { Listing, Bounty, ListingStatus, BountyStatus } from '@/types';
 import { 
   Tabs, 
@@ -26,12 +26,11 @@ import {
   Briefcase, 
   CheckCircle2, 
   Trash2,
-  AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function DashboardView() {
-  const { user, getToken } = useAuth();
+  const { user } = useAuth();
   const [listings, setListings] = useState<Listing[]>([]);
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +40,7 @@ export function DashboardView() {
 
     setLoading(true);
     
-    // Listen to listings
+    // Real-time listener for user's own hardware listings
     const qListings = query(
       collection(db, 'listings'), 
       where('sellerId', '==', user.uid), 
@@ -57,7 +56,7 @@ export function DashboardView() {
       handleFirestoreError(error, OperationType.LIST, 'listings (user dashboard)');
     });
 
-    // Listen to bounties
+    // Real-time listener for user's own bounties
     const qBounties = query(
       collection(db, 'bounties'), 
       where('posterId', '==', user.uid), 
@@ -80,18 +79,25 @@ export function DashboardView() {
     };
   }, [user]);
 
+  // Performance: Memoize lists to prevent unnecessary re-renders of the entire tab content
+  const memoizedListings = useMemo(() => listings, [listings]);
+  const memoizedBounties = useMemo(() => bounties, [bounties]);
+
   const handleMarkListingSold = async (id: string, currentStatus: ListingStatus) => {
     try {
       if (!db) return;
       const nextStatus = currentStatus === ListingStatus.AVAILABLE ? ListingStatus.SOLD : ListingStatus.AVAILABLE;
+      
+      // Atomic update for status and timestamp
       await updateDoc(doc(db, 'listings', id), { 
         status: nextStatus,
         updatedAt: serverTimestamp() 
       }).catch(err => handleFirestoreError(err, OperationType.UPDATE, 'listings/' + id));
+      
       toast.success(`Listing marked as ${nextStatus.toLowerCase()}`);
     } catch (error) {
       console.error('Update error:', error);
-      toast.error('Failed to update listing');
+      toast.error('Failed to update listing status');
     }
   };
 
@@ -99,19 +105,21 @@ export function DashboardView() {
     try {
       if (!db) return;
       const nextStatus = currentStatus === BountyStatus.OPEN ? BountyStatus.COMPLETED : BountyStatus.OPEN;
+      
       await updateDoc(doc(db, 'bounties', id), { 
         status: nextStatus,
         updatedAt: serverTimestamp()
       }).catch(err => handleFirestoreError(err, OperationType.UPDATE, 'bounties/' + id));
+      
       toast.success(`Bounty marked as ${nextStatus.toLowerCase()}`);
     } catch (error) {
       console.error('Update error:', error);
-      toast.error('Failed to update bounty');
+      toast.error('Failed to update bounty status');
     }
   };
 
   const handleDeleteListing = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this listing?')) {
+    if (window.confirm('Are you sure you want to delete this listing? This action cannot be undone.')) {
       try {
         if (!db) return;
         await deleteDoc(doc(db, 'listings', id)).catch(err => handleFirestoreError(err, OperationType.DELETE, 'listings/' + id));
@@ -124,7 +132,7 @@ export function DashboardView() {
   };
 
   const handleDeleteBounty = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this bounty?')) {
+    if (window.confirm('Are you sure you want to delete this bounty? This action cannot be undone.')) {
       try {
         if (!db) return;
         await deleteDoc(doc(db, 'bounties', id)).catch(err => handleFirestoreError(err, OperationType.DELETE, 'bounties/' + id));
@@ -158,13 +166,17 @@ export function DashboardView() {
         </TabsList>
         
         <TabsContent value="listings" className="mt-6">
-          {listings.length > 0 ? (
+          {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {listings.map(item => (
-                <Card key={item.id} className={item.status === ListingStatus.SOLD ? 'opacity-60' : ''}>
+              {[1, 2, 3].map(i => <Card key={i} className="h-40 animate-pulse bg-muted" />)}
+            </div>
+          ) : memoizedListings.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {memoizedListings.map(item => (
+                <Card key={item.id} className={cn("transition-opacity", item.status === ListingStatus.SOLD && "opacity-60")}>
                   <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <CardTitle className="text-lg">{item.title}</CardTitle>
+                    <div className="flex justify-between items-start gap-2">
+                      <CardTitle className="text-lg line-clamp-1">{item.title}</CardTitle>
                       <Badge variant={item.status === ListingStatus.AVAILABLE ? 'default' : 'secondary'}>
                         {item.status}
                       </Badge>
@@ -179,7 +191,7 @@ export function DashboardView() {
                       className="gap-2"
                     >
                       <CheckCircle2 className="h-4 w-4" />
-                      {item.status === ListingStatus.AVAILABLE ? 'Mark as Sold' : 'Mark Available'}
+                      {item.status === ListingStatus.AVAILABLE ? 'Mark Sold' : 'Relist'}
                     </Button>
                     <Button 
                       variant="ghost" 
@@ -194,18 +206,23 @@ export function DashboardView() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 border-2 border-dashed rounded-lg">
+            <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg space-y-4">
+              <Package className="h-12 w-12 text-muted-foreground opacity-20" />
               <p className="text-muted-foreground">You haven't posted any items yet.</p>
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="bounties" className="mt-6">
-          {bounties.length > 0 ? (
+          {loading ? (
             <div className="space-y-4">
-              {bounties.map(bounty => (
-                <Card key={bounty.id} className={bounty.status === BountyStatus.COMPLETED ? 'opacity-60' : ''}>
-                  <CardHeader className="flex flex-row items-center justify-between">
+              {[1, 2].map(i => <Card key={i} className="h-24 animate-pulse bg-muted" />)}
+            </div>
+          ) : memoizedBounties.length > 0 ? (
+            <div className="space-y-4">
+              {memoizedBounties.map(bounty => (
+                <Card key={bounty.id} className={cn("transition-opacity", bounty.status === BountyStatus.COMPLETED && "opacity-60")}>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0">
                     <div>
                       <CardTitle className="text-lg">{bounty.title}</CardTitle>
                       <CardDescription>Budget: ₱{bounty.budget.toLocaleString()}</CardDescription>
@@ -237,7 +254,8 @@ export function DashboardView() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 border-2 border-dashed rounded-lg">
+            <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg space-y-4">
+              <Briefcase className="h-12 w-12 text-muted-foreground opacity-20" />
               <p className="text-muted-foreground">You haven't posted any bounties yet.</p>
             </div>
           )}
