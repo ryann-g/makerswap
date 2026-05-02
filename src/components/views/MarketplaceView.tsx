@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { Listing, Category, Condition, ListingStatus } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { cn, formatFirestoreDate } from '@/lib/utils';
+import { listingSchema, ListingFormValues } from '@/lib/schemas';
+import { useForm, SubmitHandler } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { 
   Card, 
   CardContent, 
@@ -37,7 +40,6 @@ import {
   Search, 
   Plus, 
   ExternalLink, 
-  Tag, 
   ShieldCheck, 
   Clock,
   Filter,
@@ -47,27 +49,34 @@ import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 
 export function MarketplaceView() {
-  const { user, profile, getToken } = useAuth();
+  const { user, profile } = useAuth();
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<Category | 'ALL'>('ALL');
   const [isAdding, setIsAdding] = useState(false);
 
-  // Form states
-  const [newListing, setNewListing] = useState({
-    title: '',
-    description: '',
-    price: '',
-    category: Category.OTHER,
-    condition: Condition.USED,
-    contactLink: ''
+  // Zod-validated form setup for robust data entry
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<ListingFormValues>({
+    resolver: zodResolver(listingSchema),
+    defaultValues: {
+      title: '',
+      description: '',
+      price: 0,
+      category: Category.OTHER,
+      condition: Condition.USED,
+      contactLink: ''
+    }
   });
+
+  const categoryValue = watch('category');
+  const conditionValue = watch('condition');
 
   useEffect(() => {
     if (!db) return;
 
     setLoading(true);
+    // Note: Composite index (category, createdAt) required if categoryFilter != 'ALL'
     let q = query(collection(db, 'listings'), orderBy('createdAt', 'desc'));
 
     if (categoryFilter !== 'ALL') {
@@ -90,19 +99,21 @@ export function MarketplaceView() {
     return () => unsubscribe();
   }, [categoryFilter]);
 
-  const filteredListings = listings.filter(l => 
-    l.title.toLowerCase().includes(search.toLowerCase()) || 
-    l.description.toLowerCase().includes(search.toLowerCase())
-  );
+  // Performance: Memoize filtered results to prevent expensive re-calculates on every render
+  const filteredListings = useMemo(() => {
+    const term = search.toLowerCase();
+    return listings.filter(l => 
+      l.title.toLowerCase().includes(term) || 
+      l.description.toLowerCase().includes(term)
+    );
+  }, [listings, search]);
 
-  const handleAddListing = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddListing: SubmitHandler<ListingFormValues> = async (data) => {
     if (!user || !profile || !db) return;
 
     try {
       await addDoc(collection(db, 'listings'), {
-        ...newListing,
-        price: parseFloat(newListing.price) || 0,
+        ...data,
         sellerName: profile.name,
         sellerId: user.uid,
         status: ListingStatus.AVAILABLE,
@@ -112,14 +123,7 @@ export function MarketplaceView() {
       
       toast.success('Listing created successfully!');
       setIsAdding(false);
-      setNewListing({
-        title: '',
-        description: '',
-        price: '',
-        category: Category.OTHER,
-        condition: Condition.USED,
-        contactLink: ''
-      });
+      reset();
     } catch (error: any) {
       console.error('Create listing error:', error);
       toast.error(`Failed to create listing: ${error.message}`);
@@ -143,7 +147,7 @@ export function MarketplaceView() {
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
-              <form onSubmit={handleAddListing}>
+              <form onSubmit={handleSubmit(handleAddListing)}>
                 <DialogHeader>
                   <DialogTitle>List Hardware</DialogTitle>
                 </DialogHeader>
@@ -152,21 +156,21 @@ export function MarketplaceView() {
                     <Label htmlFor="title">Title</Label>
                     <Input 
                       id="title" 
-                      required 
-                      value={newListing.title} 
-                      onChange={e => setNewListing({...newListing, title: e.target.value})}
+                      {...register('title')}
+                      className={cn(errors.title && "border-destructive")}
                       placeholder="e.g. Arduino Uno R3"
                     />
+                    {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="desc">Description</Label>
                     <Textarea 
                       id="desc" 
-                      required 
-                      value={newListing.description} 
-                      onChange={e => setNewListing({...newListing, description: e.target.value})}
+                      {...register('description')}
+                      className={cn(errors.description && "border-destructive")}
                       placeholder="Condition details, compatibility, etc."
                     />
+                    {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
@@ -174,19 +178,18 @@ export function MarketplaceView() {
                       <Input 
                          id="price" 
                          type="number" 
-                         required 
-                         value={newListing.price} 
-                         onChange={e => setNewListing({...newListing, price: e.target.value})}
-                         placeholder="0 for Free"
+                         {...register('price', { valueAsNumber: true })}
+                         className={cn(errors.price && "border-destructive")}
                       />
+                      {errors.price && <p className="text-xs text-destructive">{errors.price.message}</p>}
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="category">Category</Label>
                       <Select 
-                        value={newListing.category} 
-                        onValueChange={v => setNewListing({...newListing, category: v as Category})}
+                        value={categoryValue} 
+                        onValueChange={v => setValue('category', v as Category)}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className={cn(errors.category && "border-destructive")}>
                           <SelectValue placeholder="Select" />
                         </SelectTrigger>
                         <SelectContent>
@@ -195,16 +198,17 @@ export function MarketplaceView() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {errors.category && <p className="text-xs text-destructive">{errors.category.message}</p>}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                      <div className="grid gap-2">
                       <Label htmlFor="condition">Condition</Label>
                       <Select 
-                        value={newListing.condition} 
-                        onValueChange={v => setNewListing({...newListing, condition: v as Condition})}
+                        value={conditionValue} 
+                        onValueChange={v => setValue('condition', v as Condition)}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className={cn(errors.condition && "border-destructive")}>
                           <SelectValue placeholder="Select" />
                         </SelectTrigger>
                         <SelectContent>
@@ -213,17 +217,18 @@ export function MarketplaceView() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {errors.condition && <p className="text-xs text-destructive">{errors.condition.message}</p>}
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="contact">Contact Link (Telegram/WhatsApp)</Label>
+                      <Label htmlFor="contact">Contact Link</Label>
                       <Input 
                          id="contact" 
                          type="url" 
-                         required 
-                         value={newListing.contactLink} 
-                         onChange={e => setNewListing({...newListing, contactLink: e.target.value})}
+                         {...register('contactLink')}
+                         className={cn(errors.contactLink && "border-destructive")}
                          placeholder="https://t.me/yourid"
                       />
+                      {errors.contactLink && <p className="text-xs text-destructive">{errors.contactLink.message}</p>}
                     </div>
                   </div>
                 </div>
@@ -272,7 +277,7 @@ export function MarketplaceView() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredListings.map(listing => (
             <Card key={listing.id} className="flex flex-col border-2 overflow-hidden hover:border-primary/50 transition-colors">
-              <div className="bg-muted p-4 flex items-center justify-center h-32">
+              <div className="bg-muted p-4 flex items-center justify-center h-32 relative">
                 <Package className="h-12 w-12 text-muted-foreground opacity-20" />
                 <Badge className="absolute top-2 right-2" variant="secondary">
                   {listing.category}
@@ -307,7 +312,6 @@ export function MarketplaceView() {
                     variant="outline" 
                     className="gap-2"
                     asChild
-                    nativeButton={false}
                   >
                     <a href={listing.contactLink} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="h-3 w-3" />

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, signInWithGoogle, logout } from '../lib/firebase';
-import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { UserProfile } from '../types';
+import { formatFirestoreDate } from '../lib/utils';
 import { toast } from 'sonner';
 
 interface AuthContextType {
@@ -28,57 +28,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log("Auth state changed:", user ? `UID: ${user.uid}` : "Logged out");
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log("Auth state changed:", firebaseUser ? `UID: ${firebaseUser.uid}` : "Logged out");
+      
       try {
-        setUser(user);
-        if (user && db) {
-          console.log("Checking Firestore for profile...");
-          try {
-            const userRef = doc(db, 'users', user.uid);
-            const userSnap = await getDoc(userRef);
+        setUser(firebaseUser);
+        
+        if (firebaseUser && db) {
+          const userRef = doc(db, 'users', firebaseUser.uid);
+          const userSnap = await getDoc(userRef);
+          
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            setProfile({ 
+              id: userSnap.id, 
+              uid: data.uid,
+              name: data.name,
+              email: data.email,
+              image: data.image,
+              universityOrg: data.universityOrg,
+              bio: data.bio,
+              createdAt: formatFirestoreDate(data.createdAt),
+              updatedAt: formatFirestoreDate(data.updatedAt),
+            } as UserProfile);
+          } else {
+            // New user creation
+            const now = new Date().toISOString();
+            const newProfileData = {
+              uid: firebaseUser.uid,
+              name: firebaseUser.displayName || 'Anonymous User',
+              email: firebaseUser.email || '',
+              image: firebaseUser.photoURL || '',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            };
             
-            if (userSnap.exists()) {
-              console.log("Profile found in Firestore");
-              const data = userSnap.data();
-              setProfile({ 
-                id: userSnap.id, 
-                ...data,
-                createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
-                updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
-              } as any);
-            } else {
-              console.log("No profile found, creating one...");
-              const newProfileData = {
-                uid: user.uid,
-                name: user.displayName || 'Anonymous User',
-                email: user.email || '',
-                image: user.photoURL || '',
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-              };
-              await setDoc(userRef, newProfileData);
-              console.log("Profile created successfully");
-              setProfile({ 
-                id: user.uid, 
-                ...newProfileData,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-              } as any);
-            }
-          } catch (error: any) {
-            console.error("Profile sync error detailed:", error);
-            toast.error("Failed to sync your profile. You may have limited access.");
+            await setDoc(userRef, newProfileData);
+            
+            setProfile({ 
+              id: firebaseUser.uid, 
+              ...newProfileData,
+              createdAt: now,
+              updatedAt: now,
+            } as UserProfile);
           }
         } else {
           setProfile(null);
         }
-      } catch (error) {
-        console.error("Auth state change error:", error);
+      } catch (error: any) {
+        console.error("Profile synchronization failed:", error);
+        toast.error("Profile sync error. Some features may be restricted.");
       } finally {
         setLoading(false);
       }
     });
+    
     return unsubscribe;
   }, []);
 
@@ -86,13 +90,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await signInWithGoogle();
     } catch (error: any) {
-      console.error("Login failed:", error);
-      toast.error("Login failed: " + (error.message || "Unknown error"));
+      if (error.code !== 'auth/popup-closed-by-user') {
+        toast.error(`Login failed: ${error.message}`);
+      }
     }
   };
 
   const signOutHandler = async () => {
-    await logout();
+    try {
+      await logout();
+      setProfile(null);
+    } catch (error) {
+      toast.error("Error signing out");
+    }
   };
 
   const getToken = async () => {
@@ -101,27 +111,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateProfile = async (data: Partial<UserProfile>) => {
-    if (user && db) {
-      try {
-        const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-          ...data,
-          updatedAt: serverTimestamp()
-        });
-        const updated = await getDoc(userRef);
-        if (updated.exists()) {
-          const updatedData = updated.data();
-          setProfile({ 
-            id: updated.id, 
-            ...updatedData,
-            createdAt: updatedData.createdAt?.toDate?.()?.toISOString() || updatedData.createdAt,
-            updatedAt: updatedData.updatedAt?.toDate?.()?.toISOString() || updatedData.updatedAt,
-          } as any);
-        }
-      } catch (error) {
-        console.error("Update profile error:", error);
-        throw error;
+    if (!user || !db) return;
+    
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const updatePayload = {
+        ...data,
+        updatedAt: serverTimestamp()
+      };
+      
+      // Remove id/uid from payload if present to avoid overwriting constants
+      delete (updatePayload as any).id;
+      delete (updatePayload as any).uid;
+
+      await updateDoc(userRef, updatePayload);
+      
+      // Refresh local profile state
+      const updated = await getDoc(userRef);
+      if (updated.exists()) {
+        const updatedData = updated.data();
+        setProfile({ 
+          id: updated.id, 
+          uid: updatedData.uid,
+          name: updatedData.name,
+          email: updatedData.email,
+          image: updatedData.image,
+          universityOrg: updatedData.universityOrg,
+          bio: updatedData.bio,
+          createdAt: formatFirestoreDate(updatedData.createdAt),
+          updatedAt: formatFirestoreDate(updatedData.updatedAt),
+        } as UserProfile);
       }
+      toast.success("Profile updated");
+    } catch (error) {
+      console.error("Failed to update profile:", error);
+      toast.error("Failed to save changes.");
+      throw error;
     }
   };
 
