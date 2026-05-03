@@ -18,8 +18,12 @@ export const signInWithGoogle = async () => {
     console.log("Attempting Google Sign-In with popup...");
     await signInWithPopup(auth, googleProvider);
     // Note: User resolution is handled by onAuthStateChanged in useAuth.tsx automatically
-  } catch (error: any) {
-    console.error("Error signing in with Google:", error.code, error.message);
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error("Error signing in with Google:", (error as any).code, error.message);
+    } else {
+      console.error("Error signing in with Google:", error);
+    }
     throw error;
   }
 };

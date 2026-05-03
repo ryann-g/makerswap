@@ -3,6 +3,7 @@ import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp 
 import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { Listing, Category, Condition, ListingStatus } from '@/types';
+import { useFirestoreCollection } from '@/hooks/useFirestoreCollection';
 import { useAuth } from '@/hooks/useAuth';
 import { cn, formatFirestoreDate } from '@/lib/utils';
 import { listingSchema, ListingFormValues } from '@/lib/schemas';
@@ -50,8 +51,6 @@ import { toast } from 'sonner';
 
 export function MarketplaceView() {
   const { user, profile } = useAuth();
-  const [listings, setListings] = useState<Listing[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<Category | 'ALL'>('ALL');
   const [isAdding, setIsAdding] = useState(false);
@@ -72,32 +71,15 @@ export function MarketplaceView() {
   const categoryValue = watch('category');
   const conditionValue = watch('condition');
 
-  useEffect(() => {
-    if (!db) return;
-
-    setLoading(true);
-    // Note: Composite index (category, createdAt) required if categoryFilter != 'ALL'
-    let q = query(collection(db, 'listings'), orderBy('createdAt', 'desc'));
-
+  const listingsQuery = useMemo(() => {
+    if (!db) return null;
     if (categoryFilter !== 'ALL') {
-      q = query(collection(db, 'listings'), where('category', '==', categoryFilter), orderBy('createdAt', 'desc'));
+      return query(collection(db, 'listings'), where('category', '==', categoryFilter), orderBy('createdAt', 'desc'));
     }
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: formatFirestoreDate(doc.data().createdAt)
-      })) as Listing[];
-      
-      setListings(data);
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'listings');
-    });
-
-    return () => unsubscribe();
+    return query(collection(db, 'listings'), orderBy('createdAt', 'desc'));
   }, [categoryFilter]);
+
+  const { data: listings, loading } = useFirestoreCollection<Listing>(listingsQuery, 'listings');
 
   // Performance: Memoize filtered results to prevent expensive re-calculates on every render
   const filteredListings = useMemo(() => {
@@ -124,9 +106,10 @@ export function MarketplaceView() {
       toast.success('Listing created successfully!');
       setIsAdding(false);
       reset();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Create listing error:', error);
-      toast.error(`Failed to create listing: ${error.message}`);
+      const message = error instanceof Error ? error.message : "An unknown error occurred";
+      toast.error(`Failed to create listing: ${message}`);
     }
   };
 
@@ -313,7 +296,7 @@ export function MarketplaceView() {
                     className="gap-2"
                     asChild
                   >
-                    <a href={listing.contactLink} target="_blank" rel="noopener noreferrer">
+                    <a href={listing.contactLink?.startsWith('http') ? listing.contactLink : '#'} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="h-3 w-3" />
                       Contact
                     </a>

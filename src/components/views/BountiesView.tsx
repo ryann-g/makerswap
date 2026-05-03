@@ -3,6 +3,7 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 
 import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { Bounty, BountyStatus } from '@/types';
+import { useFirestoreCollection } from '@/hooks/useFirestoreCollection';
 import { useAuth } from '@/hooks/useAuth';
 import { cn, formatFirestoreDate } from '@/lib/utils';
 import { bountySchema, BountyFormValues } from '@/lib/schemas';
@@ -40,8 +41,6 @@ import { toast } from 'sonner';
 
 export function BountiesView() {
   const { user, profile } = useAuth();
-  const [bounties, setBounties] = useState<Bounty[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
 
   // Zod-validated form setup
@@ -54,27 +53,12 @@ export function BountiesView() {
     }
   });
 
-  useEffect(() => {
-    if (!db) return;
-
-    setLoading(true);
-    const q = query(collection(db, 'bounties'), orderBy('createdAt', 'desc'));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: formatFirestoreDate(doc.data().createdAt)
-      })) as Bounty[];
-      
-      setBounties(data);
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'bounties');
-    });
-
-    return () => unsubscribe();
+  const bountiesQuery = useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, 'bounties'), orderBy('createdAt', 'desc'));
   }, []);
+
+  const { data: bounties, loading } = useFirestoreCollection<Bounty>(bountiesQuery, 'bounties');
 
   const handleAddBounty: SubmitHandler<BountyFormValues> = async (data) => {
     if (!user || !profile || !db) return;
@@ -92,9 +76,10 @@ export function BountiesView() {
       toast.success('Bounty posted successfully!');
       setIsAdding(false);
       reset();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Post bounty error:', error);
-      toast.error(`Failed to post bounty: ${error.message}`);
+      const message = error instanceof Error ? error.message : "An unknown error occurred";
+      toast.error(`Failed to post bounty: ${message}`);
     }
   };
 

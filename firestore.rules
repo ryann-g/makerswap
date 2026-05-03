@@ -67,7 +67,7 @@ service cloud.firestore {
                listing.condition in ['NEW', 'USED', 'SALVAGED'] &&
                listing.status in ['AVAILABLE', 'SOLD'] &&
                listing.sellerId == request.auth.uid &&
-               (!('contactLink' in listing) || (listing.contactLink is string && listing.contactLink.size() <= 500)) &&
+               (!('contactLink' in listing) || (listing.contactLink is string && listing.contactLink.size() <= 500 && listing.contactLink.matches('^https?://.*'))) &&
                (!('sellerName' in listing) || (listing.sellerName is string && listing.sellerName.size() <= 100)) &&
                (listing.createdAt is timestamp || listing.createdAt is number) &&
                (!('updatedAt' in listing) || (listing.updatedAt is timestamp || listing.updatedAt is number));
