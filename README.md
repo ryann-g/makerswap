@@ -1,11 +1,3 @@
-The application should now be running locally, typically accessible at `http://You are completely right, my apologies for that mix-up! I crossed my wires with a completely different prompt. 
-
-Here is the complete `README.md` for Makerswap, all in one block, with all the emojis removed so you can easily copy and paste it.
-
-***
-```markdown
-# Makerswap
-
 > **A Local Makerspace & Hardware Exchange MVP designed for student component trading.**
 
 [![Deploy Status](https://img.shields.io/badge/Vercel-Deployed-success)](https://makerswap-nu.vercel.app/)
