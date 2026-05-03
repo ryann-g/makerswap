@@ -7,6 +7,9 @@ import { MarketplaceView } from '@/components/views/MarketplaceView';
 import { BountiesView } from '@/components/views/BountiesView';
 import { DashboardView } from '@/components/views/DashboardView';
 import { ProfileView } from '@/components/views/ProfileView';
+import { TermsView } from '@/components/views/TermsView';
+import { PrivacyView } from '@/components/views/PrivacyView';
+import { ContactView } from '@/components/views/ContactView';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -29,6 +32,9 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<MarketplaceView />} />
           <Route path="/bounties" element={<BountiesView />} />
+          <Route path="/terms" element={<TermsView />} />
+          <Route path="/privacy" element={<PrivacyView />} />
+          <Route path="/contact" element={<ContactView />} />
           <Route 
             path="/dashboard" 
             element={
