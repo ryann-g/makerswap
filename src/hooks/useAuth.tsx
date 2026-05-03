@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           setProfile(null);
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error("Profile synchronization failed:", error);
         toast.error("Profile sync error. Some features may be restricted.");
       } finally {
@@ -89,9 +89,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async () => {
     try {
       await signInWithGoogle();
-    } catch (error: any) {
-      if (error.code !== 'auth/popup-closed-by-user') {
+    } catch (error) {
+      if (error instanceof Error && (error as any).code !== 'auth/popup-closed-by-user') {
         toast.error(`Login failed: ${error.message}`);
+      } else if (!(error instanceof Error)) {
+        toast.error("Login failed due to an unknown error");
       }
     }
   };

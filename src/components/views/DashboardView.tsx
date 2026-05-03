@@ -5,6 +5,7 @@ import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { useAuth } from '@/hooks/useAuth';
 import { formatFirestoreDate, cn } from '@/lib/utils';
 import { Listing, Bounty, ListingStatus, BountyStatus } from '@/types';
+import { useFirestoreCollection } from '@/hooks/useFirestoreCollection';
 import { 
   Tabs, 
   TabsContent, 
@@ -31,57 +32,27 @@ import { toast } from 'sonner';
 
 export function DashboardView() {
   const { user } = useAuth();
-  const [listings, setListings] = useState<Listing[]>([]);
-  const [bounties, setBounties] = useState<Bounty[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user || !db) return;
-
-    setLoading(true);
-    
-    // Real-time listener for user's own hardware listings
-    const qListings = query(
+  const qListings = useMemo(() => {
+    return user && db ? query(
       collection(db, 'listings'), 
       where('sellerId', '==', user.uid), 
       orderBy('createdAt', 'desc')
-    );
-    const unsubscribeListings = onSnapshot(qListings, (snapshot) => {
-      setListings(snapshot.docs.map(d => ({ 
-        id: d.id, 
-        ...d.data(),
-        createdAt: formatFirestoreDate(d.data().createdAt)
-      } as Listing)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'listings (user dashboard)');
-    });
+    ) : null;
+  }, [user]);
 
-    // Real-time listener for user's own bounties
-    const qBounties = query(
+  const { data: listings, loading: loadingListings } = useFirestoreCollection<Listing>(qListings, 'listings (user dashboard)');
+
+  const qBounties = useMemo(() => {
+    return user && db ? query(
       collection(db, 'bounties'), 
       where('posterId', '==', user.uid), 
       orderBy('createdAt', 'desc')
-    );
-    const unsubscribeBounties = onSnapshot(qBounties, (snapshot) => {
-      setBounties(snapshot.docs.map(d => ({ 
-        id: d.id, 
-        ...d.data(),
-        createdAt: formatFirestoreDate(d.data().createdAt)
-      } as Bounty)));
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'bounties (user dashboard)');
-    });
-
-    return () => {
-      unsubscribeListings();
-      unsubscribeBounties();
-    };
+    ) : null;
   }, [user]);
 
-  // Performance: Memoize lists to prevent unnecessary re-renders of the entire tab content
-  const memoizedListings = useMemo(() => listings, [listings]);
-  const memoizedBounties = useMemo(() => bounties, [bounties]);
+  const { data: bounties, loading: loadingBounties } = useFirestoreCollection<Bounty>(qBounties, 'bounties (user dashboard)');
+
+  const loading = loadingListings || loadingBounties;
 
   const handleMarkListingSold = async (id: string, currentStatus: ListingStatus) => {
     try {
@@ -170,9 +141,9 @@ export function DashboardView() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[1, 2, 3].map(i => <Card key={i} className="h-40 animate-pulse bg-muted" />)}
             </div>
-          ) : memoizedListings.length > 0 ? (
+          ) : listings.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {memoizedListings.map(item => (
+              {listings.map(item => (
                 <Card key={item.id} className={cn("transition-opacity", item.status === ListingStatus.SOLD && "opacity-60")}>
                   <CardHeader>
                     <div className="flex justify-between items-start gap-2">
@@ -218,9 +189,9 @@ export function DashboardView() {
             <div className="space-y-4">
               {[1, 2].map(i => <Card key={i} className="h-24 animate-pulse bg-muted" />)}
             </div>
-          ) : memoizedBounties.length > 0 ? (
+          ) : bounties.length > 0 ? (
             <div className="space-y-4">
-              {memoizedBounties.map(bounty => (
+              {bounties.map(bounty => (
                 <Card key={bounty.id} className={cn("transition-opacity", bounty.status === BountyStatus.COMPLETED && "opacity-60")}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0">
                     <div>
