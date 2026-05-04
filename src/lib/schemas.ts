@@ -15,6 +15,7 @@ export const listingSchema = z.object({
     (url) => !url.toLowerCase().startsWith('javascript:'),
     "Invalid URL protocol"
   ),
+  imageUrl: z.string().url().optional().or(z.literal('')),
 });
 
 /**
@@ -25,6 +26,7 @@ export const bountySchema = z.object({
   title: z.string().min(5, "Task title is too short").max(100),
   description: z.string().min(20, "Please explain the task in more detail").max(2000),
   budget: z.number().min(0, "Budget cannot be negative"),
+  imageUrl: z.string().url().optional().or(z.literal('')),
 });
 
 export type ListingFormValues = z.infer<typeof listingSchema>;

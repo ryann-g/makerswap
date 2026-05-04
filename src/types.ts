@@ -46,6 +46,7 @@ export interface Listing {
   sellerId: string;
   sellerName: string;
   createdAt: string; // ISO string normalized from Firestore
+  imageUrl?: string;
 }
 
 export interface Bounty {
@@ -57,6 +58,7 @@ export interface Bounty {
   posterId: string;
   posterName: string;
   createdAt: string; // ISO string normalized from Firestore
+  imageUrl?: string;
 }
 
 export enum OperationType {

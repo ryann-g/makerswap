@@ -9,6 +9,7 @@ import { cn, formatFirestoreDate } from '@/lib/utils';
 import { listingSchema, ListingFormValues } from '@/lib/schemas';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { ImageUpload } from '@/components/common/ImageUpload';
 import { 
   Card, 
   CardContent, 
@@ -64,7 +65,8 @@ export function MarketplaceView() {
       price: 0,
       category: Category.OTHER,
       condition: Condition.USED,
-      contactLink: ''
+      contactLink: '',
+      imageUrl: ''
     }
   });
 
@@ -224,6 +226,14 @@ export function MarketplaceView() {
                       {errors.contactLink && <p className="text-xs text-destructive">{errors.contactLink.message}</p>}
                     </div>
                   </div>
+                  <div className="grid gap-2">
+                    <Label>Item Image (Optional)</Label>
+                    <ImageUpload 
+                      folder="listings" 
+                      currentImage={watch('imageUrl')} 
+                      onUploadComplete={(url) => setValue('imageUrl', url)} 
+                    />
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button type="submit">Create Listing</Button>
@@ -270,9 +280,13 @@ export function MarketplaceView() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredListings.map(listing => (
             <Card key={listing.id} className="flex flex-col border-2 overflow-hidden hover:border-primary/50 transition-colors">
-              <div className="bg-muted p-4 flex items-center justify-center h-32 relative">
-                <Package className="h-12 w-12 text-muted-foreground opacity-20" />
-                <Badge className="absolute top-2 right-2" variant="secondary">
+              <div className="bg-muted p-4 flex items-center justify-center h-48 relative overflow-hidden">
+                {listing.imageUrl ? (
+                  <img src={listing.imageUrl} alt={listing.title} className="absolute inset-0 w-full h-full object-cover" />
+                ) : (
+                  <Package className="h-12 w-12 text-muted-foreground opacity-20" />
+                )}
+                <Badge className="absolute top-2 right-2 z-10" variant="secondary">
                   {listing.category}
                 </Badge>
               </div>

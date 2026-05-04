@@ -144,7 +144,12 @@ export function DashboardView() {
           ) : listings.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {listings.map(item => (
-                <Card key={item.id} className={cn("transition-opacity", item.status === ListingStatus.SOLD && "opacity-60")}>
+                <Card key={item.id} className={cn("transition-opacity overflow-hidden flex flex-col", item.status === ListingStatus.SOLD && "opacity-60")}>
+                  {item.imageUrl && (
+                    <div className="h-32 w-full overflow-hidden bg-muted relative">
+                      <img src={item.imageUrl} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
+                    </div>
+                  )}
                   <CardHeader>
                     <div className="flex justify-between items-start gap-2">
                       <CardTitle className="text-lg line-clamp-1">{item.title}</CardTitle>
@@ -154,7 +159,7 @@ export function DashboardView() {
                     </div>
                     <CardDescription>₱{item.price.toLocaleString()}</CardDescription>
                   </CardHeader>
-                  <CardFooter className="flex justify-between gap-2 border-t pt-4 bg-muted/20">
+                  <CardFooter className="flex justify-between gap-2 border-t pt-4 mt-auto bg-muted/20">
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -192,17 +197,22 @@ export function DashboardView() {
           ) : bounties.length > 0 ? (
             <div className="space-y-4">
               {bounties.map(bounty => (
-                <Card key={bounty.id} className={cn("transition-opacity", bounty.status === BountyStatus.COMPLETED && "opacity-60")}>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <Card key={bounty.id} className={cn("transition-opacity flex flex-col overflow-hidden", bounty.status === BountyStatus.COMPLETED && "opacity-60")}>
+                  {bounty.imageUrl && (
+                    <div className="h-24 w-full overflow-hidden bg-muted relative border-b">
+                      <img src={bounty.imageUrl} alt={bounty.title} className="absolute inset-0 w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <CardHeader className="flex flex-row items-start justify-between space-y-0">
                     <div>
-                      <CardTitle className="text-lg">{bounty.title}</CardTitle>
+                      <CardTitle className="text-lg line-clamp-1">{bounty.title}</CardTitle>
                       <CardDescription>Budget: ₱{bounty.budget.toLocaleString()}</CardDescription>
                     </div>
                     <Badge variant={bounty.status === BountyStatus.OPEN ? 'default' : 'secondary'}>
                       {bounty.status}
                     </Badge>
                   </CardHeader>
-                  <CardFooter className="flex justify-end gap-2 border-t pt-4 bg-muted/20">
+                  <CardFooter className="flex justify-end gap-2 border-t pt-4 mt-auto bg-muted/20">
                     <Button 
                       variant="outline" 
                       size="sm" 
