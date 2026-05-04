@@ -98,5 +98,10 @@ service cloud.firestore {
                (!('updatedAt' in bounty) || (bounty.updatedAt is timestamp || bounty.updatedAt is number));
       }
     }
+    // --- Support Tickets ---
+    match /support_tickets/{ticketId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
   }
 }

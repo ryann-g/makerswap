@@ -36,8 +36,9 @@ export function ContactView() {
       
       toast.success('Message sent successfully! We will get back to you soon.');
       setFormData({ name: '', email: '', subject: '', message: '' });
-    } catch (error) {
-      console.error('Error submitting form:', error);
+    } catch (error: any) {
+      console.error('Firebase exact error code:', error.code);
+      console.error('Full error object:', error);
       toast.error('Failed to send message. Please try again later.');
     } finally {
       setIsSubmitting(false);
