@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/lib/firebase';
+
+// Removed firebase storage import as we are using base64 due to bucket non-existence
 import { Button } from '@/components/ui/button';
 import { UploadCloud, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -25,11 +25,6 @@ export function ImageUpload({ onUploadComplete, folder, currentImage }: ImageUpl
   };
 
   const handleUpload = (file: File) => {
-    if (!storage) {
-      toast.error('Storage not initialized');
-      return;
-    }
-
     if (!file.type.match('image/(jpeg|png|webp)')) {
       toast.error('Only JPEG, PNG, or WEBP images are allowed');
       return;
@@ -40,32 +35,59 @@ export function ImageUpload({ onUploadComplete, folder, currentImage }: ImageUpl
       return;
     }
 
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
-    const storageRef = ref(storage, `${folder}/${fileName}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
-
     setIsUploading(true);
+    setProgress(10);
 
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        const progressValue = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setProgress(progressValue);
-      },
-      (error) => {
-        console.error('Upload failed:', error);
-        toast.error('Failed to upload image');
-        setIsUploading(false);
-      },
-      async () => {
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        setPreviewUrl(downloadURL);
-        onUploadComplete(downloadURL);
-        setIsUploading(false);
-        setProgress(0);
-      }
-    );
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        setProgress(40);
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        setProgress(80);
+        // Compress heavily to fit within Firestore document limits
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
+        
+        if (dataUrl.length > 1000000) {
+           toast.error('Image is too complex and exceeds storage limits. Try a simpler image.');
+           setIsUploading(false);
+           return;
+        }
+
+        setPreviewUrl(dataUrl);
+        onUploadComplete(dataUrl);
+        setProgress(100);
+        setTimeout(() => setIsUploading(false), 500);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      toast.error('Failed to read file');
+      setIsUploading(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
