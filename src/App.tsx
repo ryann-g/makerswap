@@ -5,13 +5,14 @@ import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { MarketplaceView } from '@/components/views/MarketplaceView';
 import { BountiesView } from '@/components/views/BountiesView';
-import { DashboardView } from '@/components/views/DashboardView';
-import { ProfileView } from '@/components/views/ProfileView';
-import { TermsView } from '@/components/views/TermsView';
-import { PrivacyView } from '@/components/views/PrivacyView';
-import { ContactView } from '@/components/views/ContactView';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary';
+
+const DashboardView = React.lazy(() => import('@/components/views/DashboardView').then(m => ({ default: m.DashboardView })));
+const ProfileView = React.lazy(() => import('@/components/views/ProfileView').then(m => ({ default: m.ProfileView })));
+const TermsView = React.lazy(() => import('@/components/views/TermsView').then(m => ({ default: m.TermsView })));
+const PrivacyView = React.lazy(() => import('@/components/views/PrivacyView').then(m => ({ default: m.PrivacyView })));
+const ContactView = React.lazy(() => import('@/components/views/ContactView').then(m => ({ default: m.ContactView })));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -21,38 +22,37 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppContent() {
-  const location = useLocation();
-  const currentView = location.pathname === '/' ? 'marketplace' : location.pathname.slice(1);
-
   return (
     <div className="flex flex-col min-h-screen font-sans antialiased">
-      <Navbar currentView={currentView} />
+      <Navbar />
       
       <main className="flex-1">
-        <Routes>
-          <Route path="/" element={<MarketplaceView />} />
-          <Route path="/bounties" element={<BountiesView />} />
-          <Route path="/terms" element={<TermsView />} />
-          <Route path="/privacy" element={<PrivacyView />} />
-          <Route path="/contact" element={<ContactView />} />
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <DashboardView />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/profile" 
-            element={
-              <ProtectedRoute>
-                <ProfileView />
-              </ProtectedRoute>
-            } 
-          />
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
+        <React.Suspense fallback={<div className="flex h-full min-h-[50vh] items-center justify-center">Loading...</div>}>
+          <Routes>
+            <Route path="/" element={<MarketplaceView />} />
+            <Route path="/bounties" element={<BountiesView />} />
+            <Route path="/terms" element={<TermsView />} />
+            <Route path="/privacy" element={<PrivacyView />} />
+            <Route path="/contact" element={<ContactView />} />
+            <Route 
+              path="/dashboard" 
+              element={
+                <ProtectedRoute>
+                  <DashboardView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/profile" 
+              element={
+                <ProtectedRoute>
+                  <ProfileView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </React.Suspense>
       </main>
 
       <Footer />

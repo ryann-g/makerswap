@@ -70,7 +70,7 @@ export function ContactView() {
                   value={formData.name}
                   onChange={handleChange}
                   className="bg-background"
-                  autoComplete="nopill"
+                  autoComplete="off"
                 />
               </div>
               <div className="space-y-2">
@@ -84,7 +84,7 @@ export function ContactView() {
                   value={formData.email}
                   onChange={handleChange}
                   className="bg-background"
-                  autoComplete="nopill"
+                  autoComplete="off"
                 />
               </div>
             </div>
