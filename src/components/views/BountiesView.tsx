@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import React, { useState, useMemo } from 'react';
+import { collection, query, orderBy, addDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { Bounty, BountyStatus } from '@/types';
@@ -55,7 +55,11 @@ export function BountiesView() {
 
   const bountiesQuery = useMemo(() => {
     if (!db) return null;
-    return query(collection(db, 'bounties'), orderBy('createdAt', 'desc'));
+    return query(
+      collection(db, 'bounties'), 
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
   }, []);
 
   const { data: bounties, loading } = useFirestoreCollection<Bounty>(bountiesQuery, 'bounties');

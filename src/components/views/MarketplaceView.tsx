@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import React, { useState, useMemo } from 'react';
+import { collection, query, where, orderBy, addDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { Listing, Category, Condition, ListingStatus } from '@/types';
@@ -74,9 +74,18 @@ export function MarketplaceView() {
   const listingsQuery = useMemo(() => {
     if (!db) return null;
     if (categoryFilter !== 'ALL') {
-      return query(collection(db, 'listings'), where('category', '==', categoryFilter), orderBy('createdAt', 'desc'));
+      return query(
+        collection(db, 'listings'), 
+        where('category', '==', categoryFilter), 
+        orderBy('createdAt', 'desc'),
+        limit(50)
+      );
     }
-    return query(collection(db, 'listings'), orderBy('createdAt', 'desc'));
+    return query(
+      collection(db, 'listings'), 
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
   }, [categoryFilter]);
 
   const { data: listings, loading } = useFirestoreCollection<Listing>(listingsQuery, 'listings');
@@ -210,7 +219,7 @@ export function MarketplaceView() {
                          {...register('contactLink')}
                          className={cn(errors.contactLink && "border-destructive")}
                          placeholder="https://t.me/yourid"
-                         autoComplete="nopill"
+                         autoComplete="off"
                       />
                       {errors.contactLink && <p className="text-xs text-destructive">{errors.contactLink.message}</p>}
                     </div>

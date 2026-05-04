@@ -17,15 +17,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
-interface NavbarProps {
-  currentView: string;
-}
-
-export function Navbar({ currentView }: NavbarProps) {
+export const Navbar = React.memo(function Navbar() {
   const { user, profile, login, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  const currentView = location.pathname === '/' ? 'marketplace' : location.pathname.slice(1);
 
   const signOutHandler = async () => {
     await signOut();
@@ -108,4 +107,4 @@ export function Navbar({ currentView }: NavbarProps) {
       </div>
     </nav>
   );
-}
+});
