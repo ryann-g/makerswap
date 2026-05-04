@@ -2,6 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // 0. Default deny
+    // Prevent Future Drift: Explicitly block any automated bulk deletions.
     match /{document=**} {
       allow read, write: if false;
     }
@@ -57,6 +58,7 @@ service cloud.firestore {
         // Action: Edit Listing (full update)
         (isValidListing(incoming()) && incoming().sellerId == existing().sellerId)
       );
+      // Explicitly block any attempt to delete the collection or documents without ownership
       allow delete: if isSignedIn() && isOwner(existing().sellerId);
 
       function isValidListing(listing) {
@@ -85,6 +87,7 @@ service cloud.firestore {
          // Action: Edit Bounty
          (isValidBounty(incoming()) && incoming().posterId == existing().posterId)
       );
+      // Explicitly block any attempt to delete the collection or documents without ownership
       allow delete: if isSignedIn() && isOwner(existing().posterId);
 
       function isValidBounty(bounty) {
