@@ -45,7 +45,7 @@ export function BountiesView() {
   const [isAdding, setIsAdding] = useState(false);
 
   // Zod-validated form setup
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<BountyFormValues>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<BountyFormValues>({
     resolver: zodResolver(bountySchema),
     defaultValues: {
       title: '',
