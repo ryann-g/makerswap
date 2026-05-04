@@ -100,7 +100,7 @@ export function BountiesView() {
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
-              <form onSubmit={handleSubmit(handleAddBounty)}>
+              <form onSubmit={handleSubmit(handleAddBounty)} autoComplete="off">
                 <DialogHeader>
                   <DialogTitle>Create New Bounty</DialogTitle>
                 </DialogHeader>

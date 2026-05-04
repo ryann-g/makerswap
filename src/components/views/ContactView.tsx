@@ -58,7 +58,7 @@ export function ContactView() {
           <CardDescription>Fill out the form below and our team will get back to you.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="name">Name</Label>
@@ -70,6 +70,7 @@ export function ContactView() {
                   value={formData.name}
                   onChange={handleChange}
                   className="bg-background"
+                  autoComplete="nopill"
                 />
               </div>
               <div className="space-y-2">
@@ -83,6 +84,7 @@ export function ContactView() {
                   value={formData.email}
                   onChange={handleChange}
                   className="bg-background"
+                  autoComplete="nopill"
                 />
               </div>
             </div>

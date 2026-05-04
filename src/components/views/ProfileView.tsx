@@ -58,7 +58,7 @@ export function ProfileView() {
           </div>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSave} className="space-y-4">
+          <form onSubmit={handleSave} className="space-y-4" autoComplete="off">
              <div className="grid gap-2">
               <Label htmlFor="name">Display Name</Label>
               <Input 
@@ -66,6 +66,7 @@ export function ProfileView() {
                 value={formData.name} 
                 onChange={e => setFormData({...formData, name: e.target.value})}
                 placeholder="How others should call you"
+                autoComplete="nopill"
               />
             </div>
             <div className="grid gap-2">
@@ -75,6 +76,7 @@ export function ProfileView() {
                 value={formData.universityOrg} 
                 onChange={e => setFormData({...formData, universityOrg: e.target.value})}
                 placeholder="e.g. MSU-IIT Robotics Club"
+                autoComplete="nopill"
               />
             </div>
             <div className="grid gap-2">
