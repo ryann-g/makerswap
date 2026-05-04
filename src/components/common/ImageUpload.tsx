@@ -5,26 +5,36 @@ import { Button } from '@/components/ui/button';
 import { UploadCloud, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { compressImage } from '@/lib/storage';
 
 interface ImageUploadProps {
   onUploadComplete: (url: string) => void;
+  onFileSelect?: (file: Blob | null) => void;
   folder: 'listings' | 'bounties';
   currentImage?: string;
 }
 
-export function ImageUpload({ onUploadComplete, folder, currentImage }: ImageUploadProps) {
+export function ImageUpload({ onUploadComplete, onFileSelect, folder, currentImage }: ImageUploadProps) {
   const [progress, setProgress] = useState<number>(0);
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentImage || null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  React.useEffect(() => {
+    if (!currentImage) {
+      setPreviewUrl(null);
+    } else {
+      setPreviewUrl(currentImage);
+    }
+  }, [currentImage]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) handleUpload(file);
   };
 
-  const handleUpload = (file: File) => {
+  const handleUpload = async (file: File) => {
     if (!file.type.match('image/(jpeg|png|webp)')) {
       toast.error('Only JPEG, PNG, or WEBP images are allowed');
       return;
@@ -36,58 +46,28 @@ export function ImageUpload({ onUploadComplete, folder, currentImage }: ImageUpl
     }
 
     setIsUploading(true);
-    setProgress(10);
+    setProgress(30);
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        setProgress(40);
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800;
-        const MAX_HEIGHT = 800;
-        let width = img.width;
-        let height = img.height;
+    try {
+      const compressedBlob = await compressImage(file);
+      setProgress(70);
 
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        
-        setProgress(80);
-        // Compress heavily to fit within Firestore document limits
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
-        
-        if (dataUrl.length > 1000000) {
-           toast.error('Image is too complex and exceeds storage limits. Try a simpler image.');
-           setIsUploading(false);
-           return;
-        }
-
-        setPreviewUrl(dataUrl);
-        onUploadComplete(dataUrl);
-        setProgress(100);
-        setTimeout(() => setIsUploading(false), 500);
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.onerror = () => {
-      toast.error('Failed to read file');
+      const previewUrl = URL.createObjectURL(compressedBlob);
+      setPreviewUrl(previewUrl);
+      
+      // Provide blob to parent for actual upload later
+      if (onFileSelect) {
+        onFileSelect(compressedBlob);
+      }
+      // Provide object URL for form preview/validation if needed
+      onUploadComplete(previewUrl);
+      
+      setProgress(100);
+      setTimeout(() => setIsUploading(false), 500);
+    } catch (error) {
+      toast.error('Failed to process image');
       setIsUploading(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -109,6 +89,7 @@ export function ImageUpload({ onUploadComplete, folder, currentImage }: ImageUpl
   const removeImage = () => {
     setPreviewUrl(null);
     onUploadComplete('');
+    if (onFileSelect) onFileSelect(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
