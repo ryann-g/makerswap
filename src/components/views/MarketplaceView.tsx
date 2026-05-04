@@ -59,7 +59,7 @@ export function MarketplaceView() {
   const [selectedImage, setSelectedImage] = useState<Blob | null>(null);
 
   // Zod-validated form setup for robust data entry
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<ListingFormValues>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<ListingFormValues>({
     resolver: zodResolver(listingSchema),
     defaultValues: {
       title: '',
@@ -250,7 +250,9 @@ export function MarketplaceView() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="submit">Create Listing</Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? 'Posting...' : 'Create Listing'}
+                  </Button>
                 </DialogFooter>
               </form>
             </DialogContent>

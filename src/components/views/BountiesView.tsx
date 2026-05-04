@@ -47,7 +47,7 @@ export function BountiesView() {
   const [selectedImage, setSelectedImage] = useState<Blob | null>(null);
 
   // Zod-validated form setup
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<BountyFormValues>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<BountyFormValues>({
     resolver: zodResolver(bountySchema),
     defaultValues: {
       title: '',
@@ -168,7 +168,9 @@ export function BountiesView() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="submit">Post Bounty</Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? 'Posting...' : 'Post Bounty'}
+                  </Button>
                 </DialogFooter>
               </form>
             </DialogContent>
