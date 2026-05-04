@@ -9,6 +9,7 @@ import { cn, formatFirestoreDate } from '@/lib/utils';
 import { bountySchema, BountyFormValues } from '@/lib/schemas';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { ImageUpload } from '@/components/common/ImageUpload';
 import { 
   Card, 
   CardContent, 
@@ -49,9 +50,12 @@ export function BountiesView() {
     defaultValues: {
       title: '',
       description: '',
-      budget: 0
+      budget: 0,
+      imageUrl: ''
     }
   });
+
+  const watchImageUrl = watch('imageUrl');
 
   const bountiesQuery = useMemo(() => {
     if (!db) return null;
@@ -140,6 +144,14 @@ export function BountiesView() {
                     />
                     {errors.budget && <p className="text-xs text-destructive">{errors.budget.message}</p>}
                   </div>
+                  <div className="grid gap-2">
+                    <Label>Reference Image (Optional)</Label>
+                    <ImageUpload 
+                      folder="bounties" 
+                      currentImage={watchImageUrl} 
+                      onUploadComplete={(url) => setValue('imageUrl', url)} 
+                    />
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button type="submit">Post Bounty</Button>
@@ -159,7 +171,12 @@ export function BountiesView() {
       ) : bounties.length > 0 ? (
         <div className="space-y-4">
           {bounties.map(bounty => (
-            <Card key={bounty.id} className="group hover:border-primary/50 transition-colors">
+            <Card key={bounty.id} className="group hover:border-primary/50 transition-colors overflow-hidden flex flex-col">
+              {bounty.imageUrl && (
+                <div className="h-32 w-full overflow-hidden bg-muted relative border-b">
+                  <img src={bounty.imageUrl} alt={bounty.title} className="absolute inset-0 w-full h-full object-cover" />
+                </div>
+              )}
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                 <div className="space-y-1">
                   <CardTitle className="text-xl font-bold">{bounty.title}</CardTitle>
