@@ -130,7 +130,7 @@ export function MarketplaceView() {
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
-              <form onSubmit={handleSubmit(handleAddListing)}>
+              <form onSubmit={handleSubmit(handleAddListing)} autoComplete="off">
                 <DialogHeader>
                   <DialogTitle>List Hardware</DialogTitle>
                 </DialogHeader>
@@ -210,6 +210,7 @@ export function MarketplaceView() {
                          {...register('contactLink')}
                          className={cn(errors.contactLink && "border-destructive")}
                          placeholder="https://t.me/yourid"
+                         autoComplete="nopill"
                       />
                       {errors.contactLink && <p className="text-xs text-destructive">{errors.contactLink.message}</p>}
                     </div>
