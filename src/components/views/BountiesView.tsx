@@ -9,6 +9,7 @@ import { cn, formatFirestoreDate } from '@/lib/utils';
 import { bountySchema, BountyFormValues } from '@/lib/schemas';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { uploadHardwareImage } from '@/lib/storage';
 import { ImageUpload } from '@/components/common/ImageUpload';
 import { 
   Card, 
@@ -43,6 +44,7 @@ import { toast } from 'sonner';
 export function BountiesView() {
   const { user, profile } = useAuth();
   const [isAdding, setIsAdding] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<Blob | null>(null);
 
   // Zod-validated form setup
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<BountyFormValues>({
@@ -72,8 +74,18 @@ export function BountiesView() {
     if (!user || !profile || !db) return;
 
     try {
+      let finalImageUrl = data.imageUrl;
+
+      if (selectedImage) {
+        const path = `bounties/${user.uid}_${Date.now()}.jpg`;
+        finalImageUrl = await uploadHardwareImage(selectedImage, path);
+      } else if (finalImageUrl && finalImageUrl.startsWith('blob:')) {
+        finalImageUrl = '';
+      }
+
       await addDoc(collection(db, 'bounties'), {
         ...data,
+        imageUrl: finalImageUrl,
         posterName: profile.name,
         posterId: user.uid,
         status: BountyStatus.OPEN,
@@ -84,6 +96,7 @@ export function BountiesView() {
       toast.success('Bounty posted successfully!');
       setIsAdding(false);
       reset();
+      setSelectedImage(null);
     } catch (error) {
       console.error('Post bounty error:', error);
       const message = error instanceof Error ? error.message : "An unknown error occurred";
@@ -150,6 +163,7 @@ export function BountiesView() {
                       folder="bounties" 
                       currentImage={watchImageUrl} 
                       onUploadComplete={(url) => setValue('imageUrl', url)} 
+                      onFileSelect={(file) => setSelectedImage(file)}
                     />
                   </div>
                 </div>
@@ -173,7 +187,7 @@ export function BountiesView() {
           {bounties.map(bounty => (
             <Card key={bounty.id} className="group hover:border-primary/50 transition-colors overflow-hidden flex flex-col">
               {bounty.imageUrl && (
-                <div className="h-32 w-full overflow-hidden bg-muted relative border-b">
+                <div className="aspect-video w-full overflow-hidden bg-muted relative border-b">
                   <img src={bounty.imageUrl} alt={bounty.title} className="absolute inset-0 w-full h-full object-cover" />
                 </div>
               )}

@@ -9,6 +9,7 @@ import { cn, formatFirestoreDate } from '@/lib/utils';
 import { listingSchema, ListingFormValues } from '@/lib/schemas';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { uploadHardwareImage } from '@/lib/storage';
 import { ImageUpload } from '@/components/common/ImageUpload';
 import { 
   Card, 
@@ -55,6 +56,7 @@ export function MarketplaceView() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<Category | 'ALL'>('ALL');
   const [isAdding, setIsAdding] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<Blob | null>(null);
 
   // Zod-validated form setup for robust data entry
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<ListingFormValues>({
@@ -105,8 +107,18 @@ export function MarketplaceView() {
     if (!user || !profile || !db) return;
 
     try {
+      let finalImageUrl = data.imageUrl;
+
+      if (selectedImage) {
+        const path = `listings/${user.uid}_${Date.now()}.jpg`;
+        finalImageUrl = await uploadHardwareImage(selectedImage, path);
+      } else if (finalImageUrl && finalImageUrl.startsWith('blob:')) {
+        finalImageUrl = '';
+      }
+
       await addDoc(collection(db, 'listings'), {
         ...data,
+        imageUrl: finalImageUrl,
         sellerName: profile.name,
         sellerId: user.uid,
         status: ListingStatus.AVAILABLE,
@@ -117,6 +129,7 @@ export function MarketplaceView() {
       toast.success('Listing created successfully!');
       setIsAdding(false);
       reset();
+      setSelectedImage(null);
     } catch (error) {
       console.error('Create listing error:', error);
       const message = error instanceof Error ? error.message : "An unknown error occurred";
@@ -232,6 +245,7 @@ export function MarketplaceView() {
                       folder="listings" 
                       currentImage={watch('imageUrl')} 
                       onUploadComplete={(url) => setValue('imageUrl', url)} 
+                      onFileSelect={(file) => setSelectedImage(file)}
                     />
                   </div>
                 </div>
@@ -280,7 +294,7 @@ export function MarketplaceView() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredListings.map(listing => (
             <Card key={listing.id} className="flex flex-col border-2 overflow-hidden hover:border-primary/50 transition-colors">
-              <div className="bg-muted p-4 flex items-center justify-center h-48 relative overflow-hidden">
+              <div className="aspect-square overflow-hidden bg-muted relative flex items-center justify-center">
                 {listing.imageUrl ? (
                   <img src={listing.imageUrl} alt={listing.title} className="absolute inset-0 w-full h-full object-cover" />
                 ) : (
