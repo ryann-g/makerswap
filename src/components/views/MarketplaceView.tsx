@@ -51,6 +51,37 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 
+const ListingImage = ({ src, alt }: { src: string; alt: string }) => {
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
+
+  return (
+    <>
+      {!loaded && !error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-muted animate-pulse">
+          <Package className="h-12 w-12 text-muted-foreground opacity-20" />
+        </div>
+      )}
+      {error ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-muted">
+          <Package className="h-12 w-12 text-muted-foreground opacity-20" />
+        </div>
+      ) : (
+        <img
+          src={src}
+          alt={alt}
+          className={cn(
+            "absolute inset-0 w-full h-full object-cover transition-opacity duration-300",
+            !loaded ? "opacity-0" : "opacity-100"
+          )}
+          onLoad={() => setLoaded(true)}
+          onError={() => setError(true)}
+        />
+      )}
+    </>
+  );
+};
+
 export function MarketplaceView() {
   const { user, profile } = useAuth();
   const [search, setSearch] = useState('');
@@ -296,9 +327,9 @@ export function MarketplaceView() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredListings.map(listing => (
             <Card key={listing.id} className="flex flex-col border-2 overflow-hidden hover:border-primary/50 transition-colors">
-              <div className="aspect-square overflow-hidden bg-muted relative flex items-center justify-center">
+              <div className="aspect-square w-full overflow-hidden bg-muted relative flex items-center justify-center">
                 {listing.imageUrl ? (
-                  <img src={listing.imageUrl} alt={listing.title} className="absolute inset-0 w-full h-full object-cover" />
+                  <ListingImage src={listing.imageUrl} alt={listing.title} />
                 ) : (
                   <Package className="h-12 w-12 text-muted-foreground opacity-20" />
                 )}

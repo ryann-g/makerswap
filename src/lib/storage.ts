@@ -1,4 +1,4 @@
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from './firebase';
 
 export const compressImage = async (file: File): Promise<Blob> => {
@@ -52,30 +52,22 @@ export const compressImage = async (file: File): Promise<Blob> => {
 };
 
 export const uploadHardwareImage = async (file: File | Blob, path: string): Promise<string> => {
-  return new Promise((resolve, reject) => {
+  try {
     const storageRef = ref(storage, path);
     // Explicitly set contentType to ensure validation passes
     const metadata = {
       contentType: file.type || 'image/jpeg',
     };
-    const uploadTask = uploadBytesResumable(storageRef, file, metadata);
-
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        // progress can be tracked here if needed
-      },
-      (error) => {
-        reject(error);
-      },
-      async () => {
-        try {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          resolve(downloadURL);
-        } catch (error) {
-          reject(error);
-        }
-      }
-    );
-  });
+    
+    // Await the upload completion
+    const snapshot = await uploadBytes(storageRef, file, metadata);
+    
+    // Await getDownloadURL from the snapshot reference
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    
+    return downloadURL;
+  } catch (error) {
+    console.error("Firebase Storage upload failed:", error);
+    throw error; // Re-throw to be caught by the caller
+  }
 };
