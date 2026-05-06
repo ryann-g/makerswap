@@ -138,45 +138,48 @@ export function MarketplaceView() {
     if (!user || !profile || !db) return;
 
     try {
-      console.log('[Frontend] Starting listing submission...');
-      let finalImageUrl = data.imageUrl;
+      console.log('[Listing 1/3] Starting submission. Form data:', { ...data, imageUrl: data.imageUrl ? '(set)' : '(empty)' });
+      let finalImageUrl = '';
 
+      // Step 1: Upload image to Firebase Storage if user selected one
       if (selectedImage) {
-        console.log('[Frontend] Initiating image upload to Storage...');
+        console.log('[Listing 2/3] Uploading image to Firebase Storage...');
         const path = `listings/${user.uid}_${Date.now()}.jpg`;
         finalImageUrl = await uploadHardwareImage(selectedImage, path);
-        console.log('[Frontend] Image upload successful. URL:', finalImageUrl);
-      } else if (finalImageUrl && finalImageUrl.startsWith('blob:')) {
-        finalImageUrl = '';
+        console.log('[Listing 2/3] Storage upload complete. Download URL:', finalImageUrl);
       }
 
-      console.log('[Frontend] Writing listing to Firestore...');
-      
-      // Ensure the download URL string is assigned to imageUrl
-      await addDoc(collection(db, 'listings'), {
-        ...data,
+      // Step 2: Build the Firestore payload — never include blob: URLs
+      const payload = {
+        title: data.title,
+        description: data.description,
+        price: data.price,
+        category: data.category,
+        condition: data.condition,
+        contactLink: data.contactLink,
         imageUrl: finalImageUrl,
         sellerName: profile.name,
         sellerId: user.uid,
         status: ListingStatus.AVAILABLE,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
-      // Removed the swallowed .catch() so errors bubble up directly to the main try/catch block
+      };
 
-      console.log('[Frontend] Firestore addDoc succeeded.');
-      
+      // Step 3: Write directly to Firestore
+      console.log('[Listing 3/3] Writing to Firestore...', { imageUrl: payload.imageUrl || '(none)' });
+      const docRef = await addDoc(collection(db, 'listings'), payload);
+      console.log('[Listing 3/3] Firestore write succeeded. Doc ID:', docRef.id);
+
       toast.success('Listing created successfully!');
       setIsAdding(false);
       reset();
       setSelectedImage(null);
-    } catch (error) {
-      console.error('[Frontend Error Catch] Failed during listing creation:', error);
-      const message = error instanceof Error ? error.message : "An unknown error occurred";
+    } catch (error: unknown) {
+      // Surface the exact Firebase error code so it never fails silently
+      const firebaseCode = (error as { code?: string })?.code;
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      console.error('[Listing Error]', { code: firebaseCode, message, error });
       toast.error(`Failed to create listing: ${message}`);
-      
-      // React Hook Form automatically resets `isSubmitting` to false when this promise rejects/resolves.
-      // We explicitly caught the error here so the UI does not freeze and the promise cleanly finishes.
     }
   };
 
