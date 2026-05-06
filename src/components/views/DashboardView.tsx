@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import React, { useMemo } from 'react';
+import { collection, query, where, orderBy, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { useAuth } from '@/hooks/useAuth';
-import { formatFirestoreDate, cn } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { Listing, Bounty, ListingStatus, BountyStatus } from '@/types';
 import { useFirestoreCollection } from '@/hooks/useFirestoreCollection';
 import { 
@@ -63,11 +62,12 @@ export function DashboardView() {
       await updateDoc(doc(db, 'listings', id), { 
         status: nextStatus,
         updatedAt: serverTimestamp() 
-      }).catch(err => handleFirestoreError(err, OperationType.UPDATE, 'listings/' + id));
+      });
       
       toast.success(`Listing marked as ${nextStatus.toLowerCase()}`);
-    } catch (error) {
-      console.error('Update error:', error);
+    } catch (error: unknown) {
+      const firebaseCode = (error as { code?: string })?.code;
+      console.error('[Dashboard] Update listing error:', { code: firebaseCode, error });
       toast.error('Failed to update listing status');
     }
   };
@@ -80,11 +80,12 @@ export function DashboardView() {
       await updateDoc(doc(db, 'bounties', id), { 
         status: nextStatus,
         updatedAt: serverTimestamp()
-      }).catch(err => handleFirestoreError(err, OperationType.UPDATE, 'bounties/' + id));
+      });
       
       toast.success(`Bounty marked as ${nextStatus.toLowerCase()}`);
-    } catch (error) {
-      console.error('Update error:', error);
+    } catch (error: unknown) {
+      const firebaseCode = (error as { code?: string })?.code;
+      console.error('[Dashboard] Update bounty error:', { code: firebaseCode, error });
       toast.error('Failed to update bounty status');
     }
   };
@@ -93,10 +94,11 @@ export function DashboardView() {
     if (window.confirm('Are you sure you want to delete this listing? This action cannot be undone.')) {
       try {
         if (!db) return;
-        await deleteDoc(doc(db, 'listings', id)).catch(err => handleFirestoreError(err, OperationType.DELETE, 'listings/' + id));
+        await deleteDoc(doc(db, 'listings', id));
         toast.success('Listing deleted');
-      } catch (error) {
-        console.error('Delete error:', error);
+      } catch (error: unknown) {
+        const firebaseCode = (error as { code?: string })?.code;
+        console.error('[Dashboard] Delete listing error:', { code: firebaseCode, error });
         toast.error('Failed to delete listing');
       }
     }
@@ -106,10 +108,11 @@ export function DashboardView() {
     if (window.confirm('Are you sure you want to delete this bounty? This action cannot be undone.')) {
       try {
         if (!db) return;
-        await deleteDoc(doc(db, 'bounties', id)).catch(err => handleFirestoreError(err, OperationType.DELETE, 'bounties/' + id));
+        await deleteDoc(doc(db, 'bounties', id));
         toast.success('Bounty deleted');
-      } catch (error) {
-        console.error('Delete error:', error);
+      } catch (error: unknown) {
+        const firebaseCode = (error as { code?: string })?.code;
+        console.error('[Dashboard] Delete bounty error:', { code: firebaseCode, error });
         toast.error('Failed to delete bounty');
       }
     }

@@ -1,11 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { collection, query, orderBy, addDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { Bounty, BountyStatus } from '@/types';
 import { useFirestoreCollection } from '@/hooks/useFirestoreCollection';
 import { useAuth } from '@/hooks/useAuth';
-import { cn, formatFirestoreDate } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { bountySchema, BountyFormValues } from '@/lib/schemas';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -74,32 +73,40 @@ export function BountiesView() {
     if (!user || !profile || !db) return;
 
     try {
-      let finalImageUrl = data.imageUrl;
+      console.log('[Bounty 1/3] Starting submission...');
+      let finalImageUrl = '';
 
       if (selectedImage) {
+        console.log('[Bounty 2/3] Uploading image to Firebase Storage...');
         const path = `bounties/${user.uid}_${Date.now()}.jpg`;
         finalImageUrl = await uploadHardwareImage(selectedImage, path);
-      } else if (finalImageUrl && finalImageUrl.startsWith('blob:')) {
-        finalImageUrl = '';
+        console.log('[Bounty 2/3] Storage upload complete. Download URL:', finalImageUrl);
       }
 
-      await addDoc(collection(db, 'bounties'), {
-        ...data,
+      const payload = {
+        title: data.title,
+        description: data.description,
+        budget: data.budget,
         imageUrl: finalImageUrl,
         posterName: profile.name,
         posterId: user.uid,
         status: BountyStatus.OPEN,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'bounties'));
-      
+      };
+
+      console.log('[Bounty 3/3] Writing to Firestore...');
+      const docRef = await addDoc(collection(db, 'bounties'), payload);
+      console.log('[Bounty 3/3] Firestore write succeeded. Doc ID:', docRef.id);
+
       toast.success('Bounty posted successfully!');
       setIsAdding(false);
       reset();
       setSelectedImage(null);
-    } catch (error) {
-      console.error('Post bounty error:', error);
-      const message = error instanceof Error ? error.message : "An unknown error occurred";
+    } catch (error: unknown) {
+      const firebaseCode = (error as { code?: string })?.code;
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      console.error('[Bounty Error]', { code: firebaseCode, message, error });
       toast.error(`Failed to post bounty: ${message}`);
     }
   };

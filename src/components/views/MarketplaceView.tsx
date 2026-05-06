@@ -1,11 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { collection, query, where, orderBy, addDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { handleFirestoreError, OperationType } from '@/lib/firestoreUtils';
 import { Listing, Category, Condition, ListingStatus } from '@/types';
 import { useFirestoreCollection } from '@/hooks/useFirestoreCollection';
 import { useAuth } from '@/hooks/useAuth';
-import { cn, formatFirestoreDate } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { listingSchema, ListingFormValues } from '@/lib/schemas';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
