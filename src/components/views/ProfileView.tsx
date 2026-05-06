@@ -33,10 +33,13 @@ export function ProfileView() {
     try {
       await updateProfile(formData);
       toast.success('Profile updated successfully!');
-    } catch (error) {
+    } catch (error: unknown) {
+      const firebaseCode = (error as { code?: string })?.code;
+      console.error('[Profile] Save error:', { code: firebaseCode, error });
       toast.error('Failed to update profile');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   return (
