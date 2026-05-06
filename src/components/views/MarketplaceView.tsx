@@ -11,39 +11,39 @@ import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { uploadHardwareImage } from '@/lib/storage';
 import { ImageUpload } from '@/components/common/ImageUpload';
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '@/components/ui/select';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogTrigger,
   DialogFooter
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  Search, 
-  Plus, 
-  ExternalLink, 
-  ShieldCheck, 
+import {
+  Search,
+  Plus,
+  ExternalLink,
+  ShieldCheck,
   Clock,
   Filter,
   Package
@@ -110,14 +110,14 @@ export function MarketplaceView() {
     if (!db) return null;
     if (categoryFilter !== 'ALL') {
       return query(
-        collection(db, 'listings'), 
-        where('category', '==', categoryFilter), 
+        collection(db, 'listings'),
+        where('category', '==', categoryFilter),
         orderBy('createdAt', 'desc'),
         limit(50)
       );
     }
     return query(
-      collection(db, 'listings'), 
+      collection(db, 'listings'),
       orderBy('createdAt', 'desc'),
       limit(50)
     );
@@ -128,8 +128,8 @@ export function MarketplaceView() {
   // Performance: Memoize filtered results to prevent expensive re-calculates on every render
   const filteredListings = useMemo(() => {
     const term = search.toLowerCase();
-    return listings.filter(l => 
-      l.title.toLowerCase().includes(term) || 
+    return listings.filter(l =>
+      l.title.toLowerCase().includes(term) ||
       l.description.toLowerCase().includes(term)
     );
   }, [listings, search]);
@@ -138,15 +138,21 @@ export function MarketplaceView() {
     if (!user || !profile || !db) return;
 
     try {
+      console.log('[Frontend] Starting listing submission...');
       let finalImageUrl = data.imageUrl;
 
       if (selectedImage) {
+        console.log('[Frontend] Initiating image upload to Storage...');
         const path = `listings/${user.uid}_${Date.now()}.jpg`;
         finalImageUrl = await uploadHardwareImage(selectedImage, path);
+        console.log('[Frontend] Image upload successful. URL:', finalImageUrl);
       } else if (finalImageUrl && finalImageUrl.startsWith('blob:')) {
         finalImageUrl = '';
       }
 
+      console.log('[Frontend] Writing listing to Firestore...');
+      
+      // Ensure the download URL string is assigned to imageUrl
       await addDoc(collection(db, 'listings'), {
         ...data,
         imageUrl: finalImageUrl,
@@ -155,16 +161,22 @@ export function MarketplaceView() {
         status: ListingStatus.AVAILABLE,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'listings'));
+      });
+      // Removed the swallowed .catch() so errors bubble up directly to the main try/catch block
+
+      console.log('[Frontend] Firestore addDoc succeeded.');
       
       toast.success('Listing created successfully!');
       setIsAdding(false);
       reset();
       setSelectedImage(null);
     } catch (error) {
-      console.error('Create listing error:', error);
+      console.error('[Frontend Error Catch] Failed during listing creation:', error);
       const message = error instanceof Error ? error.message : "An unknown error occurred";
       toast.error(`Failed to create listing: ${message}`);
+      
+      // React Hook Form automatically resets `isSubmitting` to false when this promise rejects/resolves.
+      // We explicitly caught the error here so the UI does not freeze and the promise cleanly finishes.
     }
   };
 
@@ -175,7 +187,7 @@ export function MarketplaceView() {
           <h1 className="text-3xl font-bold tracking-tight">Marketplace</h1>
           <p className="text-muted-foreground">Find or swap industrial components and tools.</p>
         </div>
-        
+
         {user && (
           <Dialog open={isAdding} onOpenChange={setIsAdding}>
             <DialogTrigger asChild>
@@ -192,8 +204,8 @@ export function MarketplaceView() {
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
                     <Label htmlFor="title">Title</Label>
-                    <Input 
-                      id="title" 
+                    <Input
+                      id="title"
                       {...register('title')}
                       className={cn(errors.title && "border-destructive")}
                       placeholder="e.g. Arduino Uno R3"
@@ -202,8 +214,8 @@ export function MarketplaceView() {
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="desc">Description</Label>
-                    <Textarea 
-                      id="desc" 
+                    <Textarea
+                      id="desc"
                       {...register('description')}
                       className={cn(errors.description && "border-destructive")}
                       placeholder="Condition details, compatibility, etc."
@@ -213,18 +225,18 @@ export function MarketplaceView() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="price">Price (₱)</Label>
-                      <Input 
-                         id="price" 
-                         type="number" 
-                         {...register('price', { valueAsNumber: true })}
-                         className={cn(errors.price && "border-destructive")}
+                      <Input
+                        id="price"
+                        type="number"
+                        {...register('price', { valueAsNumber: true })}
+                        className={cn(errors.price && "border-destructive")}
                       />
                       {errors.price && <p className="text-xs text-destructive">{errors.price.message}</p>}
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="category">Category</Label>
-                      <Select 
-                        value={categoryValue} 
+                      <Select
+                        value={categoryValue}
                         onValueChange={v => setValue('category', v as Category)}
                       >
                         <SelectTrigger className={cn(errors.category && "border-destructive")}>
@@ -240,10 +252,10 @@ export function MarketplaceView() {
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                     <div className="grid gap-2">
+                    <div className="grid gap-2">
                       <Label htmlFor="condition">Condition</Label>
-                      <Select 
-                        value={conditionValue} 
+                      <Select
+                        value={conditionValue}
                         onValueChange={v => setValue('condition', v as Condition)}
                       >
                         <SelectTrigger className={cn(errors.condition && "border-destructive")}>
@@ -259,23 +271,23 @@ export function MarketplaceView() {
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="contact">Contact Link</Label>
-                      <Input 
-                         id="contact" 
-                         type="url" 
-                         {...register('contactLink')}
-                         className={cn(errors.contactLink && "border-destructive")}
-                         placeholder="https://t.me/yourid"
-                         autoComplete="off"
+                      <Input
+                        id="contact"
+                        type="url"
+                        {...register('contactLink')}
+                        className={cn(errors.contactLink && "border-destructive")}
+                        placeholder="https://t.me/yourid"
+                        autoComplete="off"
                       />
                       {errors.contactLink && <p className="text-xs text-destructive">{errors.contactLink.message}</p>}
                     </div>
                   </div>
                   <div className="grid gap-2">
                     <Label>Item Image (Optional)</Label>
-                    <ImageUpload 
-                      folder="listings" 
-                      currentImage={watch('imageUrl')} 
-                      onUploadComplete={(url) => setValue('imageUrl', url)} 
+                    <ImageUpload
+                      folder="listings"
+                      currentImage={watch('imageUrl')}
+                      onUploadComplete={(url) => setValue('imageUrl', url)}
                       onFileSelect={(file) => setSelectedImage(file)}
                     />
                   </div>
@@ -294,9 +306,9 @@ export function MarketplaceView() {
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search parts, tools, sensors..." 
-            className="pl-10" 
+          <Input
+            placeholder="Search parts, tools, sensors..."
+            className="pl-10"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -319,7 +331,7 @@ export function MarketplaceView() {
 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {[1,2,3,4].map(i => (
+          {[1, 2, 3, 4].map(i => (
             <Card key={i} className="animate-pulse bg-muted h-[300px]" />
           ))}
         </div>
@@ -361,9 +373,9 @@ export function MarketplaceView() {
               <CardFooter className="p-4 pt-0 mt-auto border-t bg-muted/30">
                 <div className="flex items-center justify-between w-full pt-4">
                   <span className="text-xs font-medium truncate max-w-[100px]">By {listing.sellerName}</span>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
+                  <Button
+                    size="sm"
+                    variant="outline"
                     className="gap-2"
                     asChild
                   >
