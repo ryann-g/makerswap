@@ -71,6 +71,7 @@ service cloud.firestore {
                listing.sellerId == request.auth.uid &&
                (!('contactLink' in listing) || (listing.contactLink is string && listing.contactLink.size() <= 500 && listing.contactLink.matches('^https?://.*'))) &&
                (!('sellerName' in listing) || (listing.sellerName is string && listing.sellerName.size() <= 100)) &&
+               (!('imageUrl' in listing) || (listing.imageUrl is string && listing.imageUrl.size() <= 2000)) &&
                (listing.createdAt is timestamp || listing.createdAt is number) &&
                (!('updatedAt' in listing) || (listing.updatedAt is timestamp || listing.updatedAt is number));
       }
@@ -97,6 +98,7 @@ service cloud.firestore {
                bounty.status in ['OPEN', 'IN_PROGRESS', 'COMPLETED'] &&
                bounty.posterId == request.auth.uid &&
                (!('posterName' in bounty) || (bounty.posterName is string && bounty.posterName.size() <= 100)) &&
+               (!('imageUrl' in bounty) || (bounty.imageUrl is string && bounty.imageUrl.size() <= 2000)) &&
                (bounty.createdAt is timestamp || bounty.createdAt is number) &&
                (!('updatedAt' in bounty) || (bounty.updatedAt is timestamp || bounty.updatedAt is number));
       }

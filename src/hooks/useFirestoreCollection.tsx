@@ -25,7 +25,13 @@ export function useFirestoreCollection<T>(query: Query | null, operationName: st
       setData(formattedData);
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, operationName);
+      try {
+        handleFirestoreError(error, OperationType.LIST, operationName);
+      } catch {
+        // handleFirestoreError throws a user-friendly Error — we catch it here
+        // because onSnapshot callbacks are not promise-based and unhandled
+        // throws would prevent setLoading(false) from executing.
+      }
       setLoading(false);
     });
 
