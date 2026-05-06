@@ -1,0 +1,21 @@
+name: Makerswap CI
+
+on:
+  push:
+    branches: [ main, v01.image ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm install
+      - run: npm run lint  # Catches formatting/syntax errors
+      - run: npm run build # Ensures the project actually compiles
