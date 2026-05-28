@@ -7,15 +7,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 export function ProfileView() {
-  const { profile, updateProfile } = useAuth();
-  const [formData, setFormData] = useState({
-    name: '',
-    universityOrg: '',
-    bio: ''
-  });
+  const { profile, loading, updateProfile } = useAuth();
   const [saving, setSaving] = useState(false);
+
+  const [formData, setFormData] = useState({
+    name: profile?.name || '',
+    universityOrg: profile?.universityOrg || '',
+    bio: profile?.bio || ''
+  });
 
   React.useEffect(() => {
     if (profile) {
@@ -27,6 +29,26 @@ export function ProfileView() {
     }
   }, [profile]);
 
+  if (loading || !profile) {
+    return (
+      <div className="container mx-auto py-8 px-4 max-w-2xl space-y-8">
+        <div className="space-y-2">
+          <div className="h-9 w-48 bg-muted animate-pulse rounded" />
+          <div className="h-5 w-72 bg-muted animate-pulse rounded" />
+        </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-4">
+            <div className="h-20 w-20 rounded-full bg-muted animate-pulse" />
+            <div className="space-y-2">
+              <div className="h-6 w-32 bg-muted animate-pulse rounded" />
+              <div className="h-4 w-48 bg-muted animate-pulse rounded" />
+            </div>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -35,7 +57,7 @@ export function ProfileView() {
       toast.success('Profile updated successfully!');
     } catch (error: unknown) {
       const firebaseCode = (error as { code?: string })?.code;
-      console.error('[Profile] Save error:', { code: firebaseCode, error });
+      logger.error('[Profile] Save error:', { code: firebaseCode });
       toast.error('Failed to update profile');
     } finally {
       setSaving(false);

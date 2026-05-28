@@ -20,6 +20,7 @@ export function ImageUpload({ onUploadComplete, onFileSelect, folder, currentIma
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentImage || null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
   React.useEffect(() => {
     if (!currentImage) {
@@ -28,6 +29,14 @@ export function ImageUpload({ onUploadComplete, onFileSelect, folder, currentIma
       setPreviewUrl(currentImage);
     }
   }, [currentImage]);
+
+  React.useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+    };
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -52,16 +61,22 @@ export function ImageUpload({ onUploadComplete, onFileSelect, folder, currentIma
       const compressedBlob = await compressImage(file);
       setProgress(70);
 
-      const previewUrl = URL.createObjectURL(compressedBlob);
-      setPreviewUrl(previewUrl);
-      
-      // Provide blob to parent for actual upload later
+      // Revoke previous object URL to avoid memory leak
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+
+      const preview = URL.createObjectURL(compressedBlob);
+      objectUrlRef.current = preview;
+      setPreviewUrl(preview);
+
+      // Provide blob to parent for actual upload to Firebase Storage
       if (onFileSelect) {
         onFileSelect(compressedBlob);
       }
-      // Provide object URL for form preview/validation if needed
-      onUploadComplete(previewUrl);
-      
+      // Do NOT pass blob URL to parent — only the final download URL should be stored
+      onUploadComplete('');
+
       setProgress(100);
       setTimeout(() => setIsUploading(false), 500);
     } catch (error) {
@@ -87,6 +102,10 @@ export function ImageUpload({ onUploadComplete, onFileSelect, folder, currentIma
   };
 
   const removeImage = () => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
     setPreviewUrl(null);
     onUploadComplete('');
     if (onFileSelect) onFileSelect(null);
