@@ -10,6 +10,7 @@ import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { uploadHardwareImage } from '@/lib/storage';
 import { ImageUpload } from '@/components/common/ImageUpload';
+import { ImageWithFallback } from '@/components/common/ImageWithFallback';
 import {
   Card,
   CardContent,
@@ -49,37 +50,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
-
-const ListingImage = ({ src, alt }: { src: string; alt: string }) => {
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
-
-  return (
-    <>
-      {!loaded && !error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-muted animate-pulse">
-          <Package className="h-12 w-12 text-muted-foreground opacity-20" />
-        </div>
-      )}
-      {error ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-muted">
-          <Package className="h-12 w-12 text-muted-foreground opacity-20" />
-        </div>
-      ) : (
-        <img
-          src={src}
-          alt={alt}
-          className={cn(
-            "absolute inset-0 w-full h-full object-cover transition-opacity duration-300",
-            !loaded ? "opacity-0" : "opacity-100"
-          )}
-          onLoad={() => setLoaded(true)}
-          onError={() => setError(true)}
-        />
-      )}
-    </>
-  );
-};
+import { logger } from '@/lib/logger';
 
 export function MarketplaceView() {
   const { user, profile } = useAuth();
@@ -122,7 +93,7 @@ export function MarketplaceView() {
     );
   }, [categoryFilter]);
 
-  const { data: listings, loading } = useFirestoreCollection<Listing>(listingsQuery, 'listings');
+  const { data: listings, loading, error: listingsError } = useFirestoreCollection<Listing>(listingsQuery, 'listings');
 
   // Performance: Memoize filtered results to prevent expensive re-calculates on every render
   const filteredListings = useMemo(() => {
@@ -137,18 +108,15 @@ export function MarketplaceView() {
     if (!user || !profile || !db) return;
 
     try {
-      console.log('[Listing 1/3] Starting submission. Form data:', { ...data, imageUrl: data.imageUrl ? '(set)' : '(empty)' });
+      logger.log('[Listing] Starting submission');
       let finalImageUrl = '';
 
-      // Step 1: Upload image to Firebase Storage if user selected one
       if (selectedImage) {
-        console.log('[Listing 2/3] Uploading image to Firebase Storage...');
         const path = `listings/${user.uid}_${Date.now()}.jpg`;
         finalImageUrl = await uploadHardwareImage(selectedImage, path);
-        console.log('[Listing 2/3] Storage upload complete. Download URL:', finalImageUrl);
+        logger.log('[Listing] Image uploaded to Storage');
       }
 
-      // Step 2: Build the Firestore payload — never include blob: URLs
       const payload = {
         title: data.title,
         description: data.description,
@@ -164,10 +132,8 @@ export function MarketplaceView() {
         updatedAt: serverTimestamp()
       };
 
-      // Step 3: Write directly to Firestore
-      console.log('[Listing 3/3] Writing to Firestore...', { imageUrl: payload.imageUrl || '(none)' });
       const docRef = await addDoc(collection(db, 'listings'), payload);
-      console.log('[Listing 3/3] Firestore write succeeded. Doc ID:', docRef.id);
+      logger.log('[Listing] Firestore write succeeded. Doc ID:', docRef.id);
 
       toast.success('Listing created successfully!');
       setIsAdding(false);
@@ -177,7 +143,7 @@ export function MarketplaceView() {
       // Surface the exact Firebase error code so it never fails silently
       const firebaseCode = (error as { code?: string })?.code;
       const message = error instanceof Error ? error.message : 'An unknown error occurred';
-      console.error('[Listing Error]', { code: firebaseCode, message, error });
+      logger.error('[Listing Error]', { code: firebaseCode, message });
       toast.error(`Failed to create listing: ${message}`);
     }
   };
@@ -331,7 +297,12 @@ export function MarketplaceView() {
         </div>
       </div>
 
-      {loading ? (
+      {listingsError ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+          <p className="text-destructive font-medium">{listingsError}</p>
+          <p className="text-muted-foreground text-sm">Please try refreshing the page.</p>
+        </div>
+      ) : loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {[1, 2, 3, 4].map(i => (
             <Card key={i} className="animate-pulse bg-muted h-[300px]" />
@@ -343,7 +314,7 @@ export function MarketplaceView() {
             <Card key={listing.id} className="flex flex-col border-2 overflow-hidden hover:border-primary/50 transition-colors">
               <div className="aspect-square w-full overflow-hidden bg-muted relative flex items-center justify-center">
                 {listing.imageUrl ? (
-                  <ListingImage src={listing.imageUrl} alt={listing.title} />
+                  <ImageWithFallback src={listing.imageUrl} alt={listing.title} />
                 ) : (
                   <Package className="h-12 w-12 text-muted-foreground opacity-20" />
                 )}

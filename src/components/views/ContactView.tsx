@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,40 +8,42 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { Send, Loader2 } from 'lucide-react';
+import { useForm, SubmitHandler } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useAuth } from '@/hooks/useAuth';
+
+const contactSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
+  email: z.string().email("Valid email is required").max(100),
+  subject: z.string().min(3, "Subject must be at least 3 characters").max(200),
+  message: z.string().min(10, "Message must be at least 10 characters").max(2000),
+});
+
+type ContactFormValues = z.infer<typeof contactSchema>;
 
 export function ContactView() {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    subject: '',
-    message: ''
+  const { user } = useAuth();
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ContactFormValues>({
+    resolver: zodResolver(contactSchema),
+    defaultValues: { name: '', email: '', subject: '', message: '' }
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
+  const onSubmit: SubmitHandler<ContactFormValues> = async (data) => {
     try {
       await addDoc(collection(db, 'support_tickets'), {
-        ...formData,
+        ...data,
+        userId: user?.uid || null,
         createdAt: serverTimestamp(),
         status: 'open'
       });
-      
+
       toast.success('Message sent successfully! We will get back to you soon.');
-      setFormData({ name: '', email: '', subject: '', message: '' });
-    } catch (error: any) {
-      console.error('Firebase exact error code:', error.code);
-      console.error('Full error object:', error);
+      reset();
+    } catch (error: unknown) {
+      const firebaseCode = (error as { code?: string })?.code;
+      console.error('[Contact] Submit error:', { code: firebaseCode, error });
       toast.error('Failed to send message. Please try again later.');
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -58,61 +60,53 @@ export function ContactView() {
           <CardDescription>Fill out the form below and our team will get back to you.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" autoComplete="off">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="name">Name</Label>
-                <Input 
-                  id="name" 
-                  name="name" 
-                  placeholder="John Doe" 
-                  required 
-                  value={formData.name}
-                  onChange={handleChange}
+                <Input
+                  id="name"
+                  {...register('name')}
+                  placeholder="John Doe"
                   className="bg-background"
                   autoComplete="off"
                 />
+                {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">University Email</Label>
-                <Input 
-                  id="email" 
-                  name="email" 
-                  type="email" 
-                  placeholder="john@university.edu" 
-                  required 
-                  value={formData.email}
-                  onChange={handleChange}
+                <Input
+                  id="email"
+                  type="email"
+                  {...register('email')}
+                  placeholder="john@university.edu"
                   className="bg-background"
                   autoComplete="off"
                 />
+                {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="subject">Subject</Label>
-              <Input 
-                id="subject" 
-                name="subject" 
-                placeholder="How can we help?" 
-                required 
-                value={formData.subject}
-                onChange={handleChange}
+              <Input
+                id="subject"
+                {...register('subject')}
+                placeholder="How can we help?"
                 className="bg-background"
               />
+              {errors.subject && <p className="text-xs text-destructive">{errors.subject.message}</p>}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="message">Message</Label>
-              <Textarea 
-                id="message" 
-                name="message" 
-                placeholder="Describe your issue or question in detail..." 
+              <Textarea
+                id="message"
+                {...register('message')}
+                placeholder="Describe your issue or question in detail..."
                 className="min-h-[150px] bg-background"
-                required 
-                value={formData.message}
-                onChange={handleChange}
               />
+              {errors.message && <p className="text-xs text-destructive">{errors.message.message}</p>}
             </div>
 
             <Button type="submit" className="w-full transition-transform active:scale-95" disabled={isSubmitting}>

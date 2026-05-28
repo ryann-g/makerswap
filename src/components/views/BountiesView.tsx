@@ -10,6 +10,7 @@ import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { uploadHardwareImage } from '@/lib/storage';
 import { ImageUpload } from '@/components/common/ImageUpload';
+import { ImageWithFallback } from '@/components/common/ImageWithFallback';
 import { 
   Card, 
   CardContent, 
@@ -39,6 +40,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 export function BountiesView() {
   const { user, profile } = useAuth();
@@ -67,20 +69,19 @@ export function BountiesView() {
     );
   }, []);
 
-  const { data: bounties, loading } = useFirestoreCollection<Bounty>(bountiesQuery, 'bounties');
+  const { data: bounties, loading, error: bountiesError } = useFirestoreCollection<Bounty>(bountiesQuery, 'bounties');
 
   const handleAddBounty: SubmitHandler<BountyFormValues> = async (data) => {
     if (!user || !profile || !db) return;
 
     try {
-      console.log('[Bounty 1/3] Starting submission...');
+      logger.log('[Bounty] Starting submission');
       let finalImageUrl = '';
 
       if (selectedImage) {
-        console.log('[Bounty 2/3] Uploading image to Firebase Storage...');
         const path = `bounties/${user.uid}_${Date.now()}.jpg`;
         finalImageUrl = await uploadHardwareImage(selectedImage, path);
-        console.log('[Bounty 2/3] Storage upload complete. Download URL:', finalImageUrl);
+        logger.log('[Bounty] Image uploaded to Storage');
       }
 
       const payload = {
@@ -95,9 +96,8 @@ export function BountiesView() {
         updatedAt: serverTimestamp()
       };
 
-      console.log('[Bounty 3/3] Writing to Firestore...');
       const docRef = await addDoc(collection(db, 'bounties'), payload);
-      console.log('[Bounty 3/3] Firestore write succeeded. Doc ID:', docRef.id);
+      logger.log('[Bounty] Firestore write succeeded. Doc ID:', docRef.id);
 
       toast.success('Bounty posted successfully!');
       setIsAdding(false);
@@ -106,7 +106,7 @@ export function BountiesView() {
     } catch (error: unknown) {
       const firebaseCode = (error as { code?: string })?.code;
       const message = error instanceof Error ? error.message : 'An unknown error occurred';
-      console.error('[Bounty Error]', { code: firebaseCode, message, error });
+      logger.error('[Bounty Error]', { code: firebaseCode, message });
       toast.error(`Failed to post bounty: ${message}`);
     }
   };
@@ -185,7 +185,12 @@ export function BountiesView() {
         )}
       </div>
 
-      {loading ? (
+      {bountiesError ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+          <p className="text-destructive font-medium">{bountiesError}</p>
+          <p className="text-muted-foreground text-sm">Please try refreshing the page.</p>
+        </div>
+      ) : loading ? (
         <div className="space-y-4">
           {[1,2,3].map(i => (
             <Card key={i} className="animate-pulse bg-muted h-32" />
@@ -197,7 +202,7 @@ export function BountiesView() {
             <Card key={bounty.id} className="group hover:border-primary/50 transition-colors overflow-hidden flex flex-col">
               {bounty.imageUrl && (
                 <div className="aspect-video w-full overflow-hidden bg-muted relative border-b">
-                  <img src={bounty.imageUrl} alt={bounty.title} className="absolute inset-0 w-full h-full object-cover" />
+                  <ImageWithFallback src={bounty.imageUrl} alt={bounty.title} />
                 </div>
               )}
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
