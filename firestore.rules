@@ -105,8 +105,16 @@ service cloud.firestore {
     }
     // --- Support Tickets ---
     match /support_tickets/{ticketId} {
-      allow create: if true;
+      allow create: if isSignedIn() && isValidTicket(incoming());
       allow read, update, delete: if false;
+
+      function isValidTicket(ticket) {
+        return ticket.name is string && ticket.name.size() <= 100 &&
+               ticket.email is string && ticket.email.size() <= 100 &&
+               ticket.subject is string && ticket.subject.size() <= 200 &&
+               ticket.message is string && ticket.message.size() <= 2000 &&
+               ticket.status == 'open';
+      }
     }
   }
 }

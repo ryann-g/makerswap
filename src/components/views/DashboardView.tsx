@@ -28,6 +28,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
+import { ImageWithFallback } from '@/components/common/ImageWithFallback';
 
 export function DashboardView() {
   const { user } = useAuth();
@@ -39,7 +41,7 @@ export function DashboardView() {
     ) : null;
   }, [user]);
 
-  const { data: listings, loading: loadingListings } = useFirestoreCollection<Listing>(qListings, 'listings (user dashboard)');
+  const { data: listings, loading: loadingListings, error: listingsError } = useFirestoreCollection<Listing>(qListings, 'listings (user dashboard)');
 
   const qBounties = useMemo(() => {
     return user && db ? query(
@@ -49,9 +51,10 @@ export function DashboardView() {
     ) : null;
   }, [user]);
 
-  const { data: bounties, loading: loadingBounties } = useFirestoreCollection<Bounty>(qBounties, 'bounties (user dashboard)');
+  const { data: bounties, loading: loadingBounties, error: bountiesError } = useFirestoreCollection<Bounty>(qBounties, 'bounties (user dashboard)');
 
   const loading = loadingListings || loadingBounties;
+  const error = listingsError || bountiesError;
 
   const handleMarkListingSold = async (id: string, currentStatus: ListingStatus) => {
     try {
@@ -67,7 +70,7 @@ export function DashboardView() {
       toast.success(`Listing marked as ${nextStatus.toLowerCase()}`);
     } catch (error: unknown) {
       const firebaseCode = (error as { code?: string })?.code;
-      console.error('[Dashboard] Update listing error:', { code: firebaseCode, error });
+      logger.error('[Dashboard] Update listing error:', { code: firebaseCode });
       toast.error('Failed to update listing status');
     }
   };
@@ -85,7 +88,7 @@ export function DashboardView() {
       toast.success(`Bounty marked as ${nextStatus.toLowerCase()}`);
     } catch (error: unknown) {
       const firebaseCode = (error as { code?: string })?.code;
-      console.error('[Dashboard] Update bounty error:', { code: firebaseCode, error });
+      logger.error('[Dashboard] Update bounty error:', { code: firebaseCode });
       toast.error('Failed to update bounty status');
     }
   };
@@ -98,7 +101,7 @@ export function DashboardView() {
         toast.success('Listing deleted');
       } catch (error: unknown) {
         const firebaseCode = (error as { code?: string })?.code;
-        console.error('[Dashboard] Delete listing error:', { code: firebaseCode, error });
+        logger.error('[Dashboard] Delete listing error:', { code: firebaseCode });
         toast.error('Failed to delete listing');
       }
     }
@@ -112,7 +115,7 @@ export function DashboardView() {
         toast.success('Bounty deleted');
       } catch (error: unknown) {
         const firebaseCode = (error as { code?: string })?.code;
-        console.error('[Dashboard] Delete bounty error:', { code: firebaseCode, error });
+        logger.error('[Dashboard] Delete bounty error:', { code: firebaseCode });
         toast.error('Failed to delete bounty');
       }
     }
@@ -126,6 +129,13 @@ export function DashboardView() {
         <h1 className="text-3xl font-bold tracking-tight">Your Dashboard</h1>
         <p className="text-muted-foreground">Manage your hardware listings and project bounties.</p>
       </div>
+
+      {error && (
+        <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+          <p className="text-destructive text-sm font-medium">{error}</p>
+          <p className="text-muted-foreground text-xs mt-1">Please try refreshing the page.</p>
+        </div>
+      )}
 
       <Tabs defaultValue="listings" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
@@ -150,7 +160,7 @@ export function DashboardView() {
                 <Card key={item.id} className={cn("transition-opacity overflow-hidden flex flex-col", item.status === ListingStatus.SOLD && "opacity-60")}>
                   {item.imageUrl && (
                     <div className="h-32 w-full overflow-hidden bg-muted relative">
-                      <img src={item.imageUrl} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
+                      <ImageWithFallback src={item.imageUrl} alt={item.title} />
                     </div>
                   )}
                   <CardHeader>
@@ -203,7 +213,7 @@ export function DashboardView() {
                 <Card key={bounty.id} className={cn("transition-opacity flex flex-col overflow-hidden", bounty.status === BountyStatus.COMPLETED && "opacity-60")}>
                   {bounty.imageUrl && (
                     <div className="h-24 w-full overflow-hidden bg-muted relative border-b">
-                      <img src={bounty.imageUrl} alt={bounty.title} className="absolute inset-0 w-full h-full object-cover" />
+                      <ImageWithFallback src={bounty.imageUrl} alt={bounty.title} />
                     </div>
                   )}
                   <CardHeader className="flex flex-row items-start justify-between space-y-0">

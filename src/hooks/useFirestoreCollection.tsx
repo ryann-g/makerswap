@@ -6,37 +6,45 @@ import { formatFirestoreDate } from '../lib/utils';
 export function useFirestoreCollection<T>(query: Query | null, operationName: string) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!query) {
       setLoading(false);
       setData([]);
+      setError(null);
       return;
     }
 
     setLoading(true);
+    setError(null);
+
+    let unsubscribed = false;
     const unsubscribe = onSnapshot(query, (snapshot) => {
+      if (unsubscribed) return;
       const formattedData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         createdAt: formatFirestoreDate(doc.data().createdAt)
       })) as T[];
-      
+
       setData(formattedData);
       setLoading(false);
-    }, (error) => {
+    }, (err) => {
+      if (unsubscribed) return;
       try {
-        handleFirestoreError(error, OperationType.LIST, operationName);
-      } catch {
-        // handleFirestoreError throws a user-friendly Error — we catch it here
-        // because onSnapshot callbacks are not promise-based and unhandled
-        // throws would prevent setLoading(false) from executing.
+        handleFirestoreError(err, OperationType.LIST, operationName);
+      } catch (friendlyError) {
+        setError(friendlyError instanceof Error ? friendlyError.message : 'An unexpected error occurred');
       }
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribed = true;
+      unsubscribe();
+    };
   }, [query, operationName]);
 
-  return { data, loading };
+  return { data, loading, error };
 }

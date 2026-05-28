@@ -1,5 +1,6 @@
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from './firebase';
+import { logger } from './logger';
 
 export const compressImage = async (file: File): Promise<Blob> => {
   return new Promise((resolve, reject) => {
@@ -67,7 +68,7 @@ export const uploadHardwareImage = async (file: File | Blob, path: string): Prom
     
     return downloadURL;
   } catch (error) {
-    console.error("Firebase Storage upload failed:", error);
-    throw error; // Re-throw to be caught by the caller
+    logger.error("Firebase Storage upload failed:", error);
+    throw error;
   }
 };

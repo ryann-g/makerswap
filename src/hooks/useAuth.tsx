@@ -5,6 +5,7 @@ import { auth, db, signInWithGoogle, logout } from '../lib/firebase';
 import { UserProfile } from '../types';
 import { formatFirestoreDate } from '../lib/utils';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 interface AuthContextType {
   user: User | null;
@@ -29,7 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log("Auth state changed:", firebaseUser ? `UID: ${firebaseUser.uid}` : "Logged out");
+      logger.log("Auth state changed:", firebaseUser ? `UID: ${firebaseUser.uid}` : "Logged out");
       
       try {
         setUser(firebaseUser);
@@ -76,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfile(null);
         }
       } catch (error) {
-        console.error("Profile synchronization failed:", error);
+        logger.error("Profile synchronization failed:", error);
         toast.error("Profile sync error. Some features may be restricted.");
       } finally {
         setLoading(false);

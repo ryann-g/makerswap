@@ -1,4 +1,5 @@
 import { auth } from './firebase';
+import { logger } from './logger';
 
 export enum OperationType {
   CREATE = 'create',
@@ -22,7 +23,7 @@ export function handleFirestoreError(error: any, operationType: OperationType, p
     path,
     uid: auth.currentUser?.uid
   };
-  console.error('[Firestore Error Details]:', technicalInfo);
+  logger.error('[Firestore Error Details]:', technicalInfo);
 
   // Map Firebase error codes to friendly messages
   let userFriendlyMessage = "An unexpected database error occurred.";
